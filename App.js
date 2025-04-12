@@ -25,7 +25,7 @@ const TabBarIcon = ({ focused, color, size, name }) => {
     <View style={styles.tabIconContainer}>
       <Icon 
         name={name} 
-        color={color} 
+        color={focused ? '#4A6FFF' : color} 
         size={size} 
         style={focused ? styles.activeIcon : null}
       />
@@ -40,7 +40,7 @@ const TabBarLabel = ({ focused, color, children }) => {
       style={[
         styles.tabLabel, 
         { 
-          color, 
+          color: focused ? '#4A6FFF' : color, 
           fontWeight: focused ? '600' : '400',
           opacity: focused ? 1 : 0.8
         }
@@ -114,7 +114,7 @@ const AppContent = () => {
     >
       <Tab.Navigator
         screenOptions={{
-          tabBarActiveTintColor: '#673AB7',
+          tabBarActiveTintColor: '#4A6FFF',
           tabBarInactiveTintColor: isDarkMode ? '#888888' : '#999999',
           tabBarStyle: {
             backgroundColor: theme.card,
@@ -156,6 +156,7 @@ const AppContent = () => {
           name="YapayZeka"
           component={YapayZekaScreen}
           options={{
+            headerShown: false,
             title: 'Yapay Zeka',
             tabBarLabel: ({ focused, color }) => (
               <TabBarLabel focused={focused} color={color}>
@@ -176,6 +177,7 @@ const AppContent = () => {
           name="KisiselVazife"
           component={KisiselVazifeScreen}
           options={{
+            headerShown: false,
             title: 'Kişisel Vazifeler',
             tabBarLabel: ({ focused, color }) => (
               <TabBarLabel focused={focused} color={color}>
@@ -252,18 +254,16 @@ const App = () => {
 
 const styles = StyleSheet.create({
   tabIconContainer: {
-    alignItems: 'flex-start', // Sol hizalama
+    alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -8, // İkonları daha yukarı taşıdım
+    marginTop: 5,
   },
   activeIcon: {
-    transform: [{ scale: 1.1 }],
+    // Aktif ikon için stil
   },
   tabLabel: {
     fontSize: 12,
-    textAlign: 'left', // Sol hizalama
-    marginTop: -2, // Etiketleri ikona daha yakın yaptım
-    marginLeft: 0, // Sol margin kaldırdım
+    marginTop: 2,
   },
   // Özel tab bar öğesi için stiller
   customTabBarItem: {

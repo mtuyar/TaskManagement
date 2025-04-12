@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // OpenRouter API anahtarınız
-const OPENROUTER_API_KEY = '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';
+const OPENROUTER_API_KEY = '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';
+//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'
 
 // Görev önerileri almak için yapay zeka servisini çağırır
 export const getAISuggestions = async (userInput) => {

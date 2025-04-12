@@ -1,11 +1,26 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Modal, TouchableWithoutFeedback, Keyboard, KeyboardAvoidingView, Platform, FlatList, Dimensions, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  FlatList, 
+  ActivityIndicator, 
+  TouchableWithoutFeedback, 
+  Keyboard, 
+  SafeAreaView, 
+  StatusBar,
+  Platform
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTaskContext } from '../context/TaskContext';
 import { getAISuggestions } from '../services/aiService';
 import { useTheme } from '../context/ThemeContext';
 
-const { height } = Dimensions.get('window');
+// Bileşenler
+import AIInputBox from '../components/AIScreen/AIInputBox';
+import AISuggestionItem from '../components/AIScreen/AISuggestionItem';
+import AIDetailModal from '../components/AIScreen/AIDetailModal';
 
 const YapayZekaScreen = () => {
   const [userInput, setUserInput] = useState('');
@@ -17,13 +32,80 @@ const YapayZekaScreen = () => {
   const { addAISuggestionToTasks } = useTaskContext();
   const { theme, isDarkMode } = useTheme();
 
-  const frequencyOptions = ['Günlük', 'Haftalık', 'Aylık', 'Bir Kez'];
+  // Renk paleti tanımlayalım
+  const colors = {
+    primary: '#4A6FFF',
+    secondary: '#6C63FF',
+    accent: '#8A84FF',
+    success: '#4CAF50',
+    warning: '#FFC107',
+    error: '#F44336',
+    info: '#2196F3',
+    purple: '#9C27B0',
+    teal: '#009688',
+    orange: '#FF9800',
+    pink: '#E91E63',
+    indigo: '#3F51B5',
+    cyan: '#00BCD4',
+    lime: '#CDDC39',
+    brown: '#795548',
+    blueGrey: '#607D8B',
+  };
+
+  // Renk paleti dizisi
+  const colorPalette = [
+    colors.primary,    // Mavi
+    colors.success,    // Yeşil
+    colors.error,      // Kırmızı
+    colors.warning,    // Sarı
+    colors.purple,     // Mor
+    colors.teal,       // Turkuaz
+    colors.orange,     // Turuncu
+    colors.pink,       // Pembe
+    colors.indigo,     // Lacivert
+    colors.cyan,       // Açık Mavi
+    colors.lime,       // Açık Yeşil
+    colors.brown,      // Kahverengi
+    colors.blueGrey,   // Mavi Gri
+    colors.secondary,  // İkincil Mavi
+    colors.accent,     // Vurgu Mavi
+    colors.info        // Bilgi Mavisi
+  ];
+
+  // Kategori bazlı renk seçimi fonksiyonu - dengeli dağılım
+  const getCategoryColor = (category, index = 0) => {
+    // Kategori bazlı sabit renkler
+    const categoryColors = {
+      'sağlık': colors.success,
+      'fitness': colors.primary,
+      'beslenme': colors.error,
+      'zihinsel': colors.purple,
+      'kişisel': colors.secondary,
+      'sosyal': colors.warning,
+      'üretkenlik': colors.info,
+      'finans': colors.teal
+    };
+    
+    const lowerCategory = category?.toLowerCase() || '';
+    
+    // Önce kategori bazlı renk kontrolü
+    for (const [key, color] of Object.entries(categoryColors)) {
+      if (lowerCategory.includes(key)) {
+        return color;
+      }
+    }
+    
+    // Kategori eşleşmezse, index'e göre renk ata
+    // Bu sayede her öneri farklı bir renk alır
+    return colorPalette[index % colorPalette.length];
+  };
 
   const handleSubmit = async () => {
     if (!userInput.trim()) return;
     
     setIsLoading(true);
     setSuggestions([]);
+    Keyboard.dismiss();
     
     try {
       // Yapay zeka servisinden öneriler al
@@ -39,10 +121,15 @@ const YapayZekaScreen = () => {
   };
 
   const addToPersonalTasks = (suggestion) => {
-    // Frekans ekleyerek görevi ekle
+    // Renk bilgisini ekleyelim
+    const categoryColor = getCategoryColor(suggestion.category, suggestions.findIndex(s => s.id === suggestion.id));
+    
+    // Frekans ve renk ekleyerek görevi ekle
     const taskWithFrequency = {
       ...suggestion,
-      frequency: selectedFrequency
+      frequency: selectedFrequency,
+      color: categoryColor, // Renk bilgisini ekledik
+      icon: suggestion.icon // İkon bilgisini ekledik
     };
     
     addAISuggestionToTasks(taskWithFrequency);
@@ -61,297 +148,137 @@ const YapayZekaScreen = () => {
   const dismissKeyboard = () => {
     Keyboard.dismiss();
   };
-  
-  // Metin girişini temizleme fonksiyonu
-  const clearInput = () => {
-    setUserInput('');
-  };
 
-  // Mor tonlarına dönüş
-  const colors = {
-    primary: '#673AB7',     // Ana mor renk
-    primaryLight: '#BB86FC', // Açık mor
-    primaryDark: '#3700B3',  // Koyu mor
-    secondary: '#03DAC6',   // Turkuaz
-    accent: '#FF9800',      // Turuncu
-    success: '#4CAF50',     // Yeşil
-    info: '#2196F3',        // Mavi
-  };
-
-  // Kategori bazlı renk seçimi fonksiyonu - mor tonlarına ağırlık verildi
-  const getCategoryColor = (category) => {
-    const lowerCategory = category.toLowerCase();
-    
-    if (lowerCategory.includes('sağlık')) return '#9C27B0'; // Mor tonu
-    if (lowerCategory.includes('fitness')) return '#7E57C2'; // Mor tonu
-    if (lowerCategory.includes('beslenme')) return '#5E35B1'; // Mor tonu
-    if (lowerCategory.includes('zihinsel')) return '#673AB7'; // Mor tonu
-    if (lowerCategory.includes('kişisel')) return '#8E24AA'; // Mor tonu
-    if (lowerCategory.includes('sosyal')) return '#6A1B9A'; // Mor tonu
-    if (lowerCategory.includes('üretkenlik')) return '#4527A0'; // Mor tonu
-    if (lowerCategory.includes('finans')) return '#512DA8'; // Mor tonu
-    
-    return colors.primary; // Varsayılan mor
+  // Header bileşeni
+  const renderHeader = () => {
+    return (
+      <View style={styles.header}>
+        <LinearGradient
+          colors={[colors.primary, colors.secondary, colors.accent]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerContent}>
+            <Text style={styles.headerTitle}>Yapay Zeka Asistanı</Text>
+            <Text style={styles.headerSubtitle}>
+              Hedeflerinize uygun alışkanlık önerileri alın
+            </Text>
+            <View style={styles.headerIconContainer}>
+              <Icon name="robot" size={60} color="rgba(255, 255, 255, 0.2)" />
+            </View>
+          </View>
+        </LinearGradient>
+      </View>
+    );
   };
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <View style={styles.container}>
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor={colors.primary} 
+        translucent={true}
+      />
+      
+      {renderHeader()}
+      
       <TouchableWithoutFeedback onPress={dismissKeyboard}>
-        <View style={[styles.container, { backgroundColor: theme.background }]}>
-          <Text style={[styles.title, { color: theme.text }]}>Yapay Zeka Asistanı</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            Dertlerinizi, sıkıntılarınızı veya hedeflerinizi yazın, size özel alışkanlık önerileri sunalım.
-          </Text>
-          
-          <View style={[styles.inputContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
-            <TextInput
-              style={[styles.input, { color: theme.text }]}
-              placeholder="Nasıl yardımcı olabilirim?"
-              placeholderTextColor={theme.textSecondary}
-              value={userInput}
-              onChangeText={setUserInput}
-              multiline
-              returnKeyType="done"
-              blurOnSubmit={true}
-            />
-            
-            {userInput.length > 0 && (
-              <TouchableOpacity 
-                style={styles.clearButton}
-                onPress={clearInput}
-              >
-                <Icon name="close-circle" size={20} color={theme.textSecondary} />
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity 
-              style={[styles.sendButton, { 
-                backgroundColor: userInput.trim() ? colors.primary : colors.primary + '80'
-              }]} 
-              onPress={handleSubmit}
-              disabled={isLoading || !userInput.trim()}
-            >
-              <Icon name="send" size={24} color="white" />
-            </TouchableOpacity>
-          </View>
+        <View style={styles.content}>
+          <AIInputBox 
+            userInput={userInput}
+            setUserInput={setUserInput}
+            handleSubmit={handleSubmit}
+            isLoading={isLoading}
+            theme={theme}
+          />
           
           {isLoading && (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Öneriler hazırlanıyor...</Text>
+              <ActivityIndicator size="large" color="#4A6FFF" />
+              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+                Öneriler hazırlanıyor...
+              </Text>
             </View>
           )}
           
           {suggestions.length > 0 && !isLoading && (
             <View style={styles.suggestionsContainer}>
-              <Text style={[styles.suggestionsTitle, { color: theme.text }]}>Önerilen Alışkanlıklar</Text>
+              <Text style={[styles.suggestionsTitle, { color: theme.text }]}>
+                Önerilen Alışkanlıklar
+              </Text>
               <FlatList
                 data={suggestions}
                 keyExtractor={(item) => item.id}
-                showsVerticalScrollIndicator={true}
+                showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.suggestionsListContent}
-                style={styles.suggestionsList}
-                nestedScrollEnabled={true}
-                scrollEnabled={true}
-                renderItem={({ item: suggestion }) => {
-                  // Kategori bazlı renk seçimi
-                  const categoryColor = getCategoryColor(suggestion.category);
-                  
-                  return (
-                    <TouchableOpacity 
-                      activeOpacity={0.9}
-                      onPress={() => showSuggestionDetails(suggestion)}
-                    >
-                      <View style={[styles.suggestionItem, { 
-                        backgroundColor: theme.card,
-                        shadowColor: theme.shadow,
-                        borderLeftWidth: 4,
-                        borderLeftColor: categoryColor
-                      }]}>
-                        <Icon name={suggestion.icon} size={32} color={categoryColor} />
-                        <View style={styles.suggestionContent}>
-                          <Text style={[styles.suggestionTitle, { color: theme.text }]}>{suggestion.title}</Text>
-                          <View style={styles.categoryContainer}>
-                            <Text style={[styles.suggestionCategory, { 
-                              color: '#fff',
-                              backgroundColor: categoryColor + 'E6'
-                            }]}>
-                              {suggestion.category}
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.actionButtons}>
-                          <TouchableOpacity 
-                            style={[styles.infoButton, { borderColor: theme.border }]}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              showSuggestionDetails(suggestion);
-                            }}
-                          >
-                            <Icon name="information-outline" size={22} color="#673AB7" />
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={[styles.addButton, { backgroundColor: "#673AB7" }]}
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              showSuggestionDetails(suggestion);
-                            }}
-                          >
-                            <Icon name="plus" size={22} color="white" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                }}
+                renderItem={({ item, index }) => (
+                  <AISuggestionItem 
+                    suggestion={item}
+                    showSuggestionDetails={showSuggestionDetails}
+                    theme={theme}
+                    getCategoryColor={(category) => getCategoryColor(category, index)}
+                  />
+                )}
               />
             </View>
           )}
           
-          {/* Detay ve Ekleme Modalı */}
-          <Modal
-            animationType="slide"
-            transparent={true}
-            visible={modalVisible}
-            onRequestClose={() => setModalVisible(false)}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={[styles.modalContent, { backgroundColor: theme.card }]}>
-                {selectedSuggestion && (
-                  <>
-                    {(() => {
-                      const categoryColor = getCategoryColor(selectedSuggestion.category);
-                      return (
-                        <>
-                          <View style={styles.modalHeader}>
-                            <Icon 
-                              name={selectedSuggestion.icon} 
-                              size={32} 
-                              color={categoryColor} 
-                            />
-                            <Text style={[styles.modalTitle, { color: theme.text }]}>
-                              {selectedSuggestion.title}
-                            </Text>
-                          </View>
-                          
-                          <View style={[styles.modalCategoryBadge, { backgroundColor: categoryColor }]}>
-                            <Text style={[styles.modalCategoryText, { color: '#fff' }]}>
-                              {selectedSuggestion.category}
-                            </Text>
-                          </View>
-                          
-                          <ScrollView style={styles.modalDescriptionContainer}>
-                            <Text style={[styles.modalDescription, { color: theme.text }]}>
-                              {selectedSuggestion.description}
-                            </Text>
-                          </ScrollView>
-                          
-                          <View style={styles.frequencySection}>
-                            <Text style={[styles.frequencyTitle, { color: theme.text }]}>
-                              Sıklık Seçin
-                            </Text>
-                            <View style={styles.frequencyOptions}>
-                              {frequencyOptions.map(option => (
-                                <TouchableOpacity
-                                  key={option}
-                                  style={[
-                                    styles.frequencyOption,
-                                    { 
-                                      borderColor: selectedFrequency === option ? categoryColor : theme.border,
-                                      backgroundColor: selectedFrequency === option ? categoryColor + '20' : 'transparent'
-                                    }
-                                  ]}
-                                  onPress={() => setSelectedFrequency(option)}
-                                >
-                                  <Text style={[
-                                    styles.frequencyText,
-                                    { color: selectedFrequency === option ? categoryColor : theme.textSecondary }
-                                  ]}>
-                                    {option}
-                                  </Text>
-                                </TouchableOpacity>
-                              ))}
-                            </View>
-                          </View>
-                          
-                          <View style={styles.modalButtons}>
-                            <TouchableOpacity 
-                              style={[styles.modalButton, styles.modalCancelButton, { borderColor: theme.border }]}
-                              onPress={() => setModalVisible(false)}
-                            >
-                              <Text style={[styles.modalButtonText, { color: theme.text }]}>İptal</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                              style={[styles.modalButton, styles.modalAddButton, { backgroundColor: categoryColor }]}
-                              onPress={() => addToPersonalTasks(selectedSuggestion)}
-                            >
-                              <Text style={styles.modalAddButtonText}>Ekle</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </>
-                      );
-                    })()}
-                  </>
-                )}
-              </View>
-            </View>
-          </Modal>
+          <AIDetailModal 
+            modalVisible={modalVisible}
+            setModalVisible={setModalVisible}
+            selectedSuggestion={selectedSuggestion}
+            selectedFrequency={selectedFrequency}
+            setSelectedFrequency={setSelectedFrequency}
+            addToPersonalTasks={addToPersonalTasks}
+            theme={theme}
+            getCategoryColor={getCategoryColor}
+          />
         </View>
       </TouchableWithoutFeedback>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    paddingTop: 0,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
+  header: {
+    width: '100%',
+    overflow: 'hidden',
   },
-  subtitle: {
-    fontSize: 16,
-    marginBottom: 24,
-    lineHeight: 22,
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 60 : StatusBar.currentHeight + 30,
+    paddingHorizontal: 20,
+    paddingBottom: 30,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
   },
-  inputContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+  headerContent: {
     position: 'relative',
   },
-  input: {
-    flex: 1,
-    padding: 4,
-    minHeight: 100,
-    maxHeight: 150,
-    textAlignVertical: 'top',
-    paddingRight: 30, // Temizleme butonu için yer açıyoruz
-  },
-  clearButton: {
-    position: 'absolute',
-    right: 64,
-    top: 14,
-    padding: 4,
-  },
-  sendButton: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignSelf: 'flex-end',
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
     marginBottom: 8,
+  },
+  headerSubtitle: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.8)',
+    maxWidth: '80%',
+    lineHeight: 22,
+  },
+  headerIconContainer: {
+    position: 'absolute',
+    right: 0,
+    top: -10,
+  },
+  content: {
+    flex: 1,
   },
   loadingContainer: {
     padding: 24,
@@ -363,168 +290,16 @@ const styles = StyleSheet.create({
   },
   suggestionsContainer: {
     flex: 1,
-  },
-  suggestionsList: {
-    flex: 1,
-    height: height * 0.6,
-    maxHeight: 500,
+    paddingHorizontal: 20,
+    paddingTop: 20,
   },
   suggestionsTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 14,
   },
   suggestionsListContent: {
     paddingBottom: 20,
-  },
-  suggestionItem: {
-    flexDirection: 'row',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    alignItems: 'center',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  suggestionContent: {
-    flex: 1,
-    marginLeft: 16,
-  },
-  suggestionTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 6,
-  },
-  categoryContainer: {
-    flexDirection: 'row',
-  },
-  suggestionCategory: {
-    fontSize: 12,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    overflow: 'hidden',
-    fontWeight: '500',
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  infoButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 8,
-    borderWidth: 1,
-  },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Modal Stilleri
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    padding: 20,
-  },
-  modalContent: {
-    width: '100%',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginLeft: 16,
-    flex: 1,
-  },
-  modalCategoryBadge: {
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  modalCategoryText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  modalDescriptionContainer: {
-    maxHeight: 150,
-    marginBottom: 20,
-  },
-  modalDescription: {
-    fontSize: 16,
-    lineHeight: 24,
-  },
-  // Frekans Seçimi Stilleri
-  frequencySection: {
-    marginBottom: 20,
-  },
-  frequencyTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 10,
-  },
-  frequencyOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  frequencyOption: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-  },
-  frequencyText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  modalButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginLeft: 12,
-  },
-  modalCancelButton: {
-    borderWidth: 1,
-  },
-  modalAddButton: {
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  modalButtonText: {
-    fontSize: 16,
-  },
-  modalAddButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '500',
   },
 });
 

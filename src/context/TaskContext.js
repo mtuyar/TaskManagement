@@ -44,30 +44,76 @@ export const TaskProvider = ({ children }) => {
   }, [tasks, loading]);
 
   // Yeni görev ekle
-  const addTask = (task) => {
-    const newTask = {
-      ...task,
-      id: Date.now().toString(),
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
-    setTasks(prevTasks => [...prevTasks, newTask]);
+  const addTask = (newTask) => {
+    console.log("Context'e eklenen görev:", newTask); // Hata ayıklama için
+    
+    // Yeni görevleri state'e ekle
+    const updatedTasks = [...tasks, newTask];
+    setTasks(updatedTasks);
+    
+    // AsyncStorage'a kaydet
+    saveTasks(updatedTasks);
   };
 
   // Görevi tamamlandı olarak işaretle
   const toggleTaskCompletion = (id) => {
-    setTasks(tasks.map(task => 
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ));
+    console.log("Tamamlanma durumu değiştirilen görev ID:", id);
+    
+    const updatedTasks = tasks.map(task => {
+      if (task.id === id) {
+        // Bugünün tarihini al
+        const today = new Date().toISOString().split('T')[0];
+        
+        // Tamamlanma durumunu değiştir
+        const isCompleted = !task.isCompleted;
+        
+        // Tamamlanma tarihlerini güncelle
+        let completedDates = task.completedDates || [];
+        
+        if (isCompleted) {
+          // Eğer bugün zaten eklenmediyse ekle
+          if (!completedDates.includes(today)) {
+            completedDates = [...completedDates, today];
+          }
+        } else {
+          // Eğer bugün varsa çıkar
+          completedDates = completedDates.filter(date => date !== today);
+        }
+        
+        console.log("Güncellenen görev:", {
+          ...task,
+          isCompleted,
+          completedDates
+        });
+        
+        return {
+          ...task,
+          isCompleted,
+          completedDates
+        };
+      }
+      return task;
+    });
+    
+    setTasks(updatedTasks);
+    
+    // AsyncStorage'a kaydet
+    saveTasks(updatedTasks);
   };
 
   // Görevi güncelle
   const updateTask = (updatedTask) => {
-    setTasks(prevTasks => 
-      prevTasks.map(task => 
-        task.id === updatedTask.id ? updatedTask : task
-      )
+    console.log("Güncellenen görev:", updatedTask); // Hata ayıklama için
+    
+    // Görevleri güncelle
+    const updatedTasks = tasks.map(task => 
+      task.id === updatedTask.id ? updatedTask : task
     );
+    
+    setTasks(updatedTasks);
+    
+    // AsyncStorage'a kaydet
+    saveTasks(updatedTasks);
   };
 
   // Görevi sil
@@ -78,18 +124,22 @@ export const TaskProvider = ({ children }) => {
   // Yapay zeka önerisini görevlere ekle
   const addAISuggestionToTasks = (suggestion) => {
     const newTask = {
-      id: `task-${Date.now()}`,
+      id: Date.now().toString(),
       title: suggestion.title,
+      description: suggestion.description,
       category: suggestion.category,
-      icon: suggestion.icon || 'checkbox-marked-circle-outline',
+      icon: suggestion.icon,
+      color: suggestion.color,
       frequency: suggestion.frequency,
-      completed: false,
+      isCompleted: false,
       createdAt: new Date().toISOString(),
-      description: suggestion.description || '',
-      source: 'ai'
+      completedDates: [],
     };
     
     setTasks(prevTasks => [...prevTasks, newTask]);
+    
+    // Async Storage'a kaydet
+    saveTasks([...tasks, newTask]);
   };
 
   return (

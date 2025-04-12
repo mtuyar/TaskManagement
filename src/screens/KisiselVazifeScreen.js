@@ -13,7 +13,8 @@ import {
   Platform,
   StatusBar,
   Image,
-  Dimensions
+  Dimensions,
+  SafeAreaView
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -22,12 +23,17 @@ import { useTaskContext } from '../context/TaskContext';
 import { useTheme } from '../context/ThemeContext';
 import { scheduleNotification, cancelNotification } from '../services/notificationService';
 
+// Bileşenler
+import TaskItem from '../components/TaskItem';
+import TaskFormModal from '../components/TaskFormModal';
+import EmptyTaskList from '../components/EmptyTaskList';
+
 const { width, height } = Dimensions.get('window');
 
 const KisiselVazifeScreen = () => {
   // Context ve state tanımlamaları
   const { tasks, addTask, toggleTaskCompletion, deleteTask, updateTask } = useTaskContext();
-  const { theme } = useTheme();
+  const { theme, isDarkMode } = useTheme();
 
   // Animasyon değerleri
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -121,31 +127,34 @@ const KisiselVazifeScreen = () => {
     setFilteredTasks(result);
   }, [tasks, activeFilter, searchQuery]);
 
-  // Yeni vazife ekleme
-  const handleAddTask = () => {
-    if (newTaskTitle.trim() === '') {
-      return;
+  // Görevi kaydet (ekle veya güncelle)
+  const handleAddTask = (task) => {
+    console.log("Kaydedilen görev:", task); // Hata ayıklama için
+    
+    if (selectedTask) {
+      // Mevcut görevi güncelle
+      updateTask({
+        ...task,
+        id: selectedTask.id,
+        createdAt: selectedTask.createdAt,
+        completedDates: selectedTask.completedDates || [],
+      });
+    } else {
+      // Yeni görev ekle
+      addTask({
+        ...task,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        isCompleted: false,
+        completedDates: [],
+      });
     }
-
-    const newTask = {
-      title: newTaskTitle,
-      description: newTaskDescription,
-      frequency: newTaskFrequency,
-      category: newTaskCategory,
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    addTask(newTask);
-
-    // Form alanlarını temizle
-    setNewTaskTitle('');
-    setNewTaskDescription('');
-    setNewTaskFrequency('Günlük');
-    setNewTaskCategory('Kişisel');
-
+    
     // Modalı kapat
     setModalVisible(false);
+    
+    // Seçili görevi temizle
+    setSelectedTask(null);
   };
 
   // Vazife silme
@@ -540,12 +549,14 @@ const KisiselVazifeScreen = () => {
   // Vazife kartı bileşeni
   const renderTaskItem = ({ item }) => {
     return (
-      <TaskCard
+      <TaskItem
         task={item}
-        onPress={() => showTaskDetails(item)}
-        onToggle={toggleTaskCompletion}
-        onNotification={showNotificationSettings}
+        onToggleComplete={toggleTaskCompletion}
         onDelete={handleDeleteTask}
+        onEdit={(task) => {
+          setSelectedTask(task);
+          setModalVisible(true);
+        }}
       />
     );
   };
@@ -572,154 +583,13 @@ const KisiselVazifeScreen = () => {
   // Vazife ekleme modalı
   const renderAddTaskModal = () => {
     return (
-      <Modal
+      <TaskFormModal 
         visible={modalVisible}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.addTaskModalContainer}>
-            <View style={styles.addTaskModalHeader}>
-              <Text style={styles.addTaskModalTitle}>Yeni Vazife</Text>
-              <TouchableOpacity 
-                style={styles.addTaskModalCloseButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Icon name="close" size={22} color="#999" />
-              </TouchableOpacity>
-            </View>
-            
-            <ScrollView style={styles.addTaskModalContent}>
-              {/* Başlık Girişi */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Başlık</Text>
-                <View style={styles.inputContainer}>
-                  <Icon name="format-title" size={20} color="#4A6FFF" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="Vazife başlığı girin"
-                    placeholderTextColor="#999"
-                    value={newTaskTitle}
-                    onChangeText={setNewTaskTitle}
-                  />
-                </View>
-              </View>
-              
-              {/* Açıklama Girişi */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Açıklama <Text style={styles.optionalText}>(İsteğe bağlı)</Text></Text>
-                <View style={styles.textAreaContainer}>
-                  <TextInput
-                    style={styles.textArea}
-                    placeholder="Vazife açıklaması girin"
-                    placeholderTextColor="#999"
-                    value={newTaskDescription}
-                    onChangeText={setNewTaskDescription}
-                    multiline={true}
-                    numberOfLines={3}
-                    textAlignVertical="top"
-                  />
-                </View>
-              </View>
-              
-              {/* Sıklık Seçimi */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Sıklık</Text>
-                <View style={styles.optionsContainer}>
-                  {['Günlük', 'Haftalık', 'Aylık'].map((frequency) => (
-                    <TouchableOpacity
-                      key={frequency}
-                      style={[
-                        styles.optionButton,
-                        newTaskFrequency === frequency && styles.optionButtonActive
-                      ]}
-                      onPress={() => setNewTaskFrequency(frequency)}
-                    >
-                      <Icon 
-                        name={
-                          frequency === 'Günlük' ? 'calendar-today' : 
-                          frequency === 'Haftalık' ? 'calendar-week' : 'calendar-month'
-                        } 
-                        size={16} 
-                        color={newTaskFrequency === frequency ? '#FFF' : '#4A6FFF'} 
-                        style={styles.optionIcon}
-                      />
-                      <Text 
-                        style={[
-                          styles.optionText,
-                          newTaskFrequency === frequency && styles.optionTextActive
-                        ]}
-                      >
-                        {frequency}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              
-              {/* Kategori Seçimi */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Kategori</Text>
-                <View style={styles.categoryGrid}>
-                  {Object.keys(categoryColors).map((category) => (
-                    <TouchableOpacity
-                      key={category}
-                      style={[
-                        styles.categoryButton,
-                        newTaskCategory === category && styles.categoryButtonActive,
-                        { borderColor: categoryColors[category] }
-                      ]}
-                      onPress={() => setNewTaskCategory(category)}
-                    >
-                      <View 
-                        style={[
-                          styles.categoryIcon,
-                          { backgroundColor: newTaskCategory === category ? categoryColors[category] : `${categoryColors[category]}20` }
-                        ]}
-                      >
-                        <Icon 
-                          name={categoryIcons[category]} 
-                          size={18} 
-                          color={newTaskCategory === category ? '#FFF' : categoryColors[category]} 
-                        />
-                      </View>
-                      <Text 
-                        style={[
-                          styles.categoryText,
-                          { color: newTaskCategory === category ? categoryColors[category] : '#666' }
-                        ]}
-                      >
-                        {category}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </ScrollView>
-            
-            <View style={styles.addTaskModalFooter}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>İptal</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.addButton,
-                  newTaskTitle.trim() === '' && styles.addButtonDisabled
-                ]}
-                onPress={handleAddTask}
-                disabled={newTaskTitle.trim() === ''}
-              >
-                <Text style={styles.addButtonText}>Ekle</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setModalVisible(false)}
+        onSave={handleAddTask}
+        initialTask={selectedTask}
+        theme={theme}
+      />
     );
   };
 
@@ -1013,101 +883,117 @@ const KisiselVazifeScreen = () => {
     );
   };
 
-  // Boş durum bileşeni
-  const renderEmptyComponent = () => {
+  // Boş liste durumunda gösterilecek bileşen
+  const renderEmptyList = () => {
     return (
-      <View style={styles.emptyContainer}>
-        <View style={styles.emptyIconContainer}>
-          <Icon name="clipboard-text-outline" size={80} color="#CCCCCC" />
-        </View>
-        <Text style={styles.emptyTitle}>Henüz Vazife Yok</Text>
-        <Text style={styles.emptyDescription}>
-          Yeni vazifeler ekleyerek günlük, haftalık veya aylık planlarınızı oluşturun.
-        </Text>
-        <TouchableOpacity
-          style={styles.emptyButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={styles.emptyButtonText}>Vazife Ekle</Text>
-        </TouchableOpacity>
-      </View>
+      <EmptyTaskList 
+        onAddTask={() => setModalVisible(true)}
+        theme={theme}
+      />
     );
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar 
+        barStyle="light-content" 
+        backgroundColor={colors.primary} 
+        translucent={true}
+      />
       
-      {renderHeader()}
-      
-      {/* Arama Çubuğu */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Icon name="magnify" size={20} color="#666666" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Vazife ara..."
-            placeholderTextColor="#999999"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close-circle" size={18} color="#666666" />
-            </TouchableOpacity>
-          )}
+      <View style={styles.container}>
+        {renderHeader()}
+        
+        {/* Arama Çubuğu */}
+        <View style={styles.searchContainer}>
+          <View style={styles.searchBar}>
+            <Icon name="magnify" size={20} color="#666666" />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Vazife ara..."
+              placeholderTextColor="#999999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Icon name="close-circle" size={18} color="#666666" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
-      
-      {/* Filtreler */}
-      <View style={styles.filtersContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersScrollContent}
-        >
-          {['Tümü', 'Günlük', 'Haftalık', 'Aylık'].map((filter) => (
-            <TouchableOpacity
-              key={filter}
-              style={[
-                styles.filterButton,
-                activeFilter === filter && styles.activeFilterButton
-              ]}
-              onPress={() => setActiveFilter(filter)}
-            >
-              <Text 
+        
+        {/* Filtreler */}
+        <View style={styles.filtersContainer}>
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersScrollContent}
+          >
+            {['Tümü', 'Günlük', 'Haftalık', 'Aylık'].map((filter) => (
+              <TouchableOpacity
+                key={filter}
                 style={[
-                  styles.filterButtonText,
-                  activeFilter === filter && styles.activeFilterButtonText
+                  styles.filterButton,
+                  activeFilter === filter && styles.activeFilterButton
                 ]}
+                onPress={() => setActiveFilter(filter)}
               >
-                {filter}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-      
-      {/* Görev Listesi */}
-      {filteredTasks.length === 0 ? (
-        renderEmptyComponent()
-      ) : (
+                <Text 
+                  style={[
+                    styles.filterButtonText,
+                    activeFilter === filter && styles.activeFilterButtonText
+                  ]}
+                >
+                  {filter}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+        
+        {/* Görev Listesi */}
         <FlatList
           data={filteredTasks}
           renderItem={renderTaskItem}
-          keyExtractor={item => item.id.toString()}
+          keyExtractor={(item) => item.id}
           contentContainerStyle={styles.taskList}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={renderEmptyList}
+          onScroll={Animated.event(
+            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+            { useNativeDriver: false }
+          )}
         />
-      )}
+        
+        {/* Yeni görev ekleme butonu */}
+        <TouchableOpacity 
+          style={styles.addTaskButton}
+          onPress={() => setModalVisible(true)}
+        >
+          <LinearGradient
+            colors={[colors.primary, colors.secondary]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.addButtonGradient}
+          >
+            <Icon name="plus" size={24} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+        
+        {/* Görev ekleme/düzenleme modalı */}
+        <TaskFormModal 
+          visible={modalVisible}
+          onClose={() => setModalVisible(false)}
+          onSave={handleAddTask}
+          initialTask={selectedTask}
+          theme={theme}
+        />
+      </View>
       
-      {/* Artı Butonu */}
-      {renderAddButton()}
-      
-      {renderAddTaskModal()}
-      {renderDetailModal()}
       {renderNotificationModal()}
-    </View>
+      {renderDetailModal()}
+    </SafeAreaView>
   );
 };
 
@@ -1115,6 +1001,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FFFFFF',
+    paddingTop: 0,
   },
   header: {
     width: '100%',
@@ -1122,9 +1009,11 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
-    paddingBottom: 15,
+    paddingTop: Platform.OS === 'ios' ? 70 : StatusBar.currentHeight + 30,
     paddingHorizontal: 20,
+    paddingBottom: 20,
+    borderBottomRightRadius: 20,
+    borderBottomLeftRadius: 20,
   },
   headerContent: {
     flex: 1,
@@ -1342,179 +1231,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
-  addTaskModalContainer: {
-    width: '85%',
-    maxWidth: 360,
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 10,
-    maxHeight: '70%',
-  },
-  addTaskModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  addTaskModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  addTaskModalCloseButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F5F7FA',
+  addButtonGradient: {
+    width: '100%',
+    height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  addTaskModalContent: {
-    padding: 16,
-    maxHeight: 400,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  formLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 6,
-  },
-  optionalText: {
-    fontSize: 12,
-    fontWeight: 'normal',
-    color: '#999',
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#FAFAFA',
-  },
-  inputIcon: {
-    marginRight: 10,
-  },
-  formInput: {
-    flex: 1,
-    height: 42,
-    fontSize: 15,
-    color: '#333',
-  },
-  textAreaContainer: {
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 8,
-    backgroundColor: '#FAFAFA',
-    padding: 12,
-  },
-  textArea: {
-    fontSize: 15,
-    color: '#333',
-    minHeight: 80,
-  },
-  optionsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  optionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    marginHorizontal: 4,
-    backgroundColor: '#FAFAFA',
-  },
-  optionButtonActive: {
-    backgroundColor: '#4A6FFF',
-    borderColor: '#4A6FFF',
-  },
-  optionIcon: {
-    marginRight: 6,
-  },
-  optionText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#666',
-  },
-  optionTextActive: {
-    color: '#FFF',
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -5,
-  },
-  categoryCard: {
-    width: '33.33%',
-    paddingHorizontal: 5,
-    marginBottom: 10,
-  },
-  categoryIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  categoryTitle: {
-    fontSize: 11,
-    textAlign: 'center',
-  },
-  categoryCount: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-  },
-  addTaskModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  cancelButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#F5F7FA',
-    marginRight: 10,
-  },
-  cancelButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#666',
-  },
-  addButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#4A6FFF',
-    alignItems: 'center',
-  },
-  addButtonDisabled: {
-    backgroundColor: '#CCCCCC',
-  },
-  addButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFF',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1864,12 +1585,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#F44336',
     marginLeft: 8,
-  },
-  addButtonGradient: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   completedTaskCard: {
     opacity: 0.9,
