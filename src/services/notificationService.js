@@ -1,6 +1,5 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-// import * as Device from 'expo-device'; // Bu satırı kaldırın veya yorum satırına alın
 
 // Bildirimleri yapılandır
 Notifications.setNotificationHandler({
@@ -8,42 +7,32 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
-    priority: Notifications.AndroidNotificationPriority.HIGH,
   }),
 });
 
-// Bildirim izinlerini kontrol et ve iste
-export const requestNotificationPermissions = async () => {
+// Bildirim izinlerini kontrol et ve gerekirse iste
+export const registerForPushNotificationsAsync = async () => {
   try {
-    // Emülatör kontrolünü kaldırın
-    // if (Device.isDevice === false) {
-    //   console.log('Emülatörde bildirimler tam olarak çalışmayabilir');
-    // }
-    
-    // Android için kanal oluştur
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF231F7C',
-        sound: true,
-      });
-    }
-
-    // İzinleri kontrol et
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
-    // Eğer izin yoksa, iste
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
     
     if (finalStatus !== 'granted') {
-      console.log('Bildirim izni verilmedi');
+      console.log('Bildirim izni alınamadı!');
       return false;
+    }
+    
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF231F7C',
+      });
     }
     
     return true;
@@ -53,91 +42,45 @@ export const requestNotificationPermissions = async () => {
   }
 };
 
-// Bildirim planla - Saatlik tekrarlanan bildirim
-export const scheduleNotification = async (
-  taskId,
-  title,
-  body,
-  date,
-  isRepeating = false
-) => {
+// Bildirim planla
+export const scheduleNotification = async ({ id, title, body, data, time, repeat = false }) => {
   try {
-    const hasPermission = await requestNotificationPermissions();
-    
-    if (!hasPermission) {
-      console.log('Bildirim izni verilmedi');
-      return null;
+    // Zaman kontrolü
+    if (!time || !(time instanceof Date) || isNaN(time.getTime())) {
+      console.error("Geçersiz bildirim zamanı:", time);
+      throw new Error("Geçersiz bildirim zamanı");
     }
     
-    // Bildirim zamanını ayarla
-    const notificationTime = new Date(date);
+    console.log("Bildirim planlanıyor:", { id, title, body, time: time.toISOString(), repeat });
     
-    // Konsola bilgi yazdır
-    console.log('Bildirim planlanıyor:');
-    console.log('Başlık:', title);
-    console.log('İçerik:', body);
-    console.log('Saat:', notificationTime.getHours() + ':' + notificationTime.getMinutes());
+    // Bildirim içeriğini oluştur
+    const notificationContent = {
+      title,
+      body,
+      data: data || {},
+    };
     
-    // Önce tüm mevcut bildirimleri iptal et
-    await cancelAllNotifications();
+    // Bildirim tetikleyicisini oluştur
+    const trigger = {
+      hour: time.getHours(),
+      minute: time.getMinutes(),
+      repeats: repeat
+    };
     
-    // Trigger oluştur
-    let trigger;
-    
-    if (isRepeating) {
-      // Tekrarlanan bildirim için trigger
-      trigger = {
-        hour: notificationTime.getHours(),
-        minute: notificationTime.getMinutes(),
-        repeats: true,
-      };
-      
-      console.log(`Tekrarlanan bildirim saati: ${trigger.hour}:${trigger.minute}`);
-    } else {
-      // Tek seferlik bildirim için trigger
-      // Şu anki zamanı al
-      const now = new Date();
-      
-      // Bildirim zamanını ayarla
-      const scheduledTime = new Date();
-      scheduledTime.setHours(notificationTime.getHours());
-      scheduledTime.setMinutes(notificationTime.getMinutes());
-      scheduledTime.setSeconds(0);
-      scheduledTime.setMilliseconds(0);
-      
-      // Eğer bildirim zamanı geçmişse, bir sonraki güne ayarla
-      if (scheduledTime <= now) {
-        scheduledTime.setDate(scheduledTime.getDate() + 1);
-        console.log('Bildirim zamanı geçmiş, yarına planlanıyor');
-      }
-      
-      // Tarih nesnesini doğrudan kullan
-      trigger = scheduledTime;
-      
-      console.log(`Tek seferlik bildirim zamanı: ${scheduledTime.toLocaleString()}`);
-    }
+    console.log("Bildirim tetikleyicisi:", trigger);
     
     // Bildirimi planla
     const notificationId = await Notifications.scheduleNotificationAsync({
-      content: {
-        title,
-        body,
-        data: { taskId },
-        sound: true,
-      },
+      content: notificationContent,
       trigger,
+      identifier: id
     });
     
-    console.log('Bildirim planlandı, ID:', notificationId);
-    
-    // Planlanan bildirimleri kontrol et
-    const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
-    console.log('Planlanan bildirimler:', scheduledNotifications);
-    
+    console.log("Bildirim başarıyla planlandı, ID:", notificationId);
     return notificationId;
   } catch (error) {
-    console.error('Bildirim planlanırken hata oluştu:', error);
-    return null;
+    console.error("Bildirim planlanırken hata oluştu:", error);
+    throw error;
   }
 };
 
@@ -145,11 +88,11 @@ export const scheduleNotification = async (
 export const cancelNotification = async (notificationId) => {
   try {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
-    console.log('Bildirim iptal edildi, ID:', notificationId);
+    console.log(`Bildirim iptal edildi: ${notificationId}`);
     return true;
   } catch (error) {
     console.error('Bildirim iptal edilirken hata oluştu:', error);
-    return false;
+    throw error;
   }
 };
 
@@ -161,7 +104,18 @@ export const cancelAllNotifications = async () => {
     return true;
   } catch (error) {
     console.error('Tüm bildirimler iptal edilirken hata oluştu:', error);
-    return false;
+    throw error;
+  }
+};
+
+// Planlanmış bildirimleri getir
+export const getScheduledNotifications = async () => {
+  try {
+    const notifications = await Notifications.getAllScheduledNotificationsAsync();
+    return notifications;
+  } catch (error) {
+    console.error('Planlanmış bildirimler alınırken hata oluştu:', error);
+    throw error;
   }
 };
 
@@ -178,15 +132,4 @@ export const addNotificationResponseReceivedListener = (callback) => {
 // Dinleyicileri kaldır
 export const removeNotificationSubscription = (subscription) => {
   subscription && Notifications.removeNotificationSubscription(subscription);
-};
-
-// Planlanan bildirimleri getir
-export const getAllScheduledNotifications = async () => {
-  try {
-    const notifications = await Notifications.getAllScheduledNotificationsAsync();
-    return notifications;
-  } catch (error) {
-    console.error('Bildirimler alınırken hata oluştu:', error);
-    return [];
-  }
 }; 

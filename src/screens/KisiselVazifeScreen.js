@@ -14,7 +14,8 @@ import {
   StatusBar,
   Image,
   Dimensions,
-  SafeAreaView
+  SafeAreaView,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -27,6 +28,7 @@ import { scheduleNotification, cancelNotification } from '../services/notificati
 import TaskItem from '../components/TaskItem';
 import TaskFormModal from '../components/TaskFormModal';
 import EmptyTaskList from '../components/EmptyTaskList';
+import CustomTimePicker from '../components/CustomTimePicker';
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,7 +47,7 @@ const KisiselVazifeScreen = () => {
 
   const headerHeight = scrollY.interpolate({
     inputRange: [0, 100],
-    outputRange: [180, 80],
+    outputRange: [140, 60],
     extrapolate: 'clamp'
   });
 
@@ -66,6 +68,10 @@ const KisiselVazifeScreen = () => {
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const [notificationTime, setNotificationTime] = useState(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
+
+  // Silme işlemi için onay kutusu
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   // Renk paleti
   const colors = {
@@ -174,74 +180,148 @@ const KisiselVazifeScreen = () => {
   // Bildirim ayarlarını gösterme
   const showNotificationSettings = (task) => {
     setSelectedTask(task);
-    setNotificationEnabled(task.notification?.enabled || false);
-
-    if (task.notification?.time) {
-      setNotificationTime(new Date(task.notification.time));
+    
+    // Eğer görevde bildirim varsa, o bildirim ayarlarını göster
+    if (task.notification) {
+      setNotificationEnabled(true);
+      
+      // Bildirim zamanını ayarla
+      if (task.notification.time) {
+        const notificationTime = new Date(task.notification.time);
+        setNotificationTime(notificationTime);
+      }
     } else {
+      // Bildirim yoksa, varsayılan değerleri ayarla
+      setNotificationEnabled(false);
+      
+      // Varsayılan bildirim zamanı: şu andan 1 saat sonra
       const defaultTime = new Date();
       defaultTime.setHours(defaultTime.getHours() + 1);
+      defaultTime.setMinutes(0);
+      defaultTime.setSeconds(0);
       setNotificationTime(defaultTime);
     }
-
+    
     setNotificationModalVisible(true);
   };
 
   // Bildirim ayarlarını kaydetme
-  const saveNotificationSettings = async () => {
-    if (selectedTask) {
-      try {
-        // Eğer önceden bir bildirim varsa iptal et
+  const handleSetNotification = async () => {
+    if (!selectedTask) return;
+    
+    try {
+      if (notificationEnabled) {
+        // Bildirim zamanını ayarla
+        let notificationTimeObj;
+        
+        try {
+          notificationTimeObj = new Date(notificationTime);
+          console.log("Bildirim zamanı (ham):", notificationTime);
+          console.log("Bildirim zamanı (işlenmiş):", notificationTimeObj);
+          
+          // Geçerli bir tarih olduğundan emin olalım
+          if (isNaN(notificationTimeObj.getTime())) {
+            throw new Error("Geçersiz tarih");
+          }
+        } catch (error) {
+          console.error("Tarih dönüştürme hatası:", error);
+          
+          // Hata durumunda şu anki zamanı kullan
+          notificationTimeObj = new Date();
+          notificationTimeObj.setSeconds(0);
+          console.log("Varsayılan zaman kullanılıyor:", notificationTimeObj);
+          
+          Alert.alert(
+            "Uyarı",
+            "Bildirim zamanı ayarlanırken bir sorun oluştu. Şu anki zaman kullanılacak.",
+            [{ text: "Tamam" }]
+          );
+        }
+        
+        // Bildirim ID'si oluştur
+        const notificationId = `task_${selectedTask.id}`;
+        
+        // Önce varsa eski bildirimi iptal et
         if (selectedTask.notification?.id) {
           await cancelNotification(selectedTask.notification.id);
         }
-
-        if (!notificationEnabled) {
-          // Bildirim devre dışı bırakıldıysa, bildirimi iptal et ve güncelle
-          updateTask(selectedTask.id, {
-            notification: {
-              enabled: false,
-              time: null,
-              id: null
-            }
-          });
-        } else {
-          // Bildirim zamanını ayarla
-          const notificationDate = new Date();
-          notificationDate.setHours(notificationTime.getHours());
-          notificationDate.setMinutes(notificationTime.getMinutes());
-          notificationDate.setSeconds(0);
-
-          // Eğer seçilen saat şu anki saatten önceyse, bir sonraki güne ayarla
-          const now = new Date();
-          if (notificationDate < now) {
-            notificationDate.setDate(notificationDate.getDate() + 1);
-          }
-
-          // Bildirim ID'si oluştur
-          const notificationId = await scheduleNotification(
-            selectedTask.id,
-            'Vazife Hatırlatıcı',
-            `${selectedTask.title} zamanı geldi!`,
-            notificationDate
-          );
-
-          if (notificationId) {
-            // Görevi güncelle
-            updateTask(selectedTask.id, {
-              notification: {
-                enabled: true,
-                time: notificationDate.toISOString(),
-                id: notificationId
-              }
-            });
-          }
+        
+        // Bildirim zamanını yarına ayarla (hemen çalmasını önlemek için)
+        const scheduledTime = new Date(notificationTimeObj);
+        const now = new Date();
+        
+        // Eğer seçilen zaman bugün için geçmişse, yarına ayarla
+        if (scheduledTime.getHours() < now.getHours() || 
+            (scheduledTime.getHours() === now.getHours() && scheduledTime.getMinutes() <= now.getMinutes())) {
+          scheduledTime.setDate(scheduledTime.getDate() + 1);
         }
-
+        
+        // Yeni bildirimi planla
+        await scheduleNotification({
+          id: notificationId,
+          title: 'Vazife Hatırlatıcı',
+          body: selectedTask.title,
+          data: { taskId: selectedTask.id },
+          time: scheduledTime,
+          repeat: true
+        });
+        
+        // Görevi güncelle
+        const updatedTask = {
+          ...selectedTask,
+          notification: {
+            id: notificationId,
+            enabled: true,
+            time: notificationTimeObj.toISOString()
+          }
+        };
+        
+        // Görevi güncelle ve state'i yenile
+        updateTask(updatedTask);
+        setSelectedTask(updatedTask);
+        
+        // Bildirim modalını kapat
         setNotificationModalVisible(false);
-      } catch (error) {
-        console.error('Bildirim ayarlanırken hata oluştu:', error);
+        
+        // Başarılı mesajı göster
+        Alert.alert(
+          "Bildirim Ayarlandı",
+          `"${selectedTask.title}" görevi için her gün ${formatTime(notificationTimeObj)} saatinde bildirim alacaksınız.`,
+          [{ text: "Tamam" }]
+        );
+      } else {
+        // Bildirimi iptal et
+        if (selectedTask.notification?.id) {
+          await cancelNotification(selectedTask.notification.id);
+        }
+        
+        // Görevi güncelle
+        const updatedTask = {
+          ...selectedTask,
+          notification: null
+        };
+        
+        // Görevi güncelle ve state'i yenile
+        updateTask(updatedTask);
+        setSelectedTask(updatedTask);
+        
+        // Bildirim modalını kapat
+        setNotificationModalVisible(false);
+        
+        // Bilgi mesajı göster
+        Alert.alert(
+          "Bildirim İptal Edildi",
+          `"${selectedTask.title}" görevi için bildirim iptal edildi.`,
+          [{ text: "Tamam" }]
+        );
       }
+    } catch (error) {
+      console.error("Bildirim ayarlanırken hata oluştu:", error);
+      Alert.alert(
+        "Hata",
+        "Bildirim ayarlanırken bir hata oluştu: " + error.message,
+        [{ text: "Tamam" }]
+      );
     }
   };
 
@@ -546,17 +626,23 @@ const KisiselVazifeScreen = () => {
     );
   };
 
+  // Vazife düzenleme
+  const handleEditTask = (task) => {
+    setSelectedTask(task);
+    setModalVisible(true);
+  };
+
   // Vazife kartı bileşeni
   const renderTaskItem = ({ item }) => {
     return (
       <TaskItem
+        key={item.id}
         task={item}
         onToggleComplete={toggleTaskCompletion}
-        onDelete={handleDeleteTask}
-        onEdit={(task) => {
-          setSelectedTask(task);
-          setModalVisible(true);
-        }}
+        onDelete={confirmDelete}
+        onEdit={handleEditTask}
+        onPress={showTaskDetails}
+        onSetNotification={showNotificationSettings}
       />
     );
   };
@@ -574,7 +660,7 @@ const KisiselVazifeScreen = () => {
           end={{ x: 1, y: 0 }}
           style={styles.addButtonGradient}
         >
-          <Icon name="plus" size={24} color="#FFF" />
+          <Icon name="plus" size={24} color="#FFFFFF" />
         </LinearGradient>
       </TouchableOpacity>
     );
@@ -593,157 +679,175 @@ const KisiselVazifeScreen = () => {
     );
   };
 
-  // Bildirim modalı
+  // Bildirim modalını daha kompakt hale getirelim
   const renderNotificationModal = () => {
     if (!selectedTask) return null;
     
-    const categoryColor = categoryColors[selectedTask.category] || colors.primary;
+    // Görevin kategorisine göre renk belirle
+    const taskColor = selectedTask.color || categoryColors[selectedTask.category] || colors.primary;
+    
+    // Kurulu bildirim var mı kontrol et
+    const hasActiveNotification = selectedTask.notification?.enabled;
     
     return (
       <Modal
         visible={notificationModalVisible}
-        animationType="fade"
         transparent={true}
+        animationType="slide"
         onRequestClose={() => setNotificationModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.notificationModalContainer}>
-            {/* Modal Başlık */}
-            <View style={styles.notificationModalHeader}>
-              <Text style={styles.notificationModalTitle}>Bildirim Ayarla</Text>
-              <TouchableOpacity 
+          <View style={[styles.notificationModal, { backgroundColor: theme.card }]}>
+            {/* Modal başlık - Görevin rengini kullan */}
+            <LinearGradient
+              colors={[taskColor, taskColor + '99']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.notificationModalHeader}
+            >
+              <TouchableOpacity
                 style={styles.notificationModalCloseButton}
                 onPress={() => setNotificationModalVisible(false)}
               >
-                <Icon name="close" size={20} color="#999" />
+                <Icon name="close" size={24} color="#FFF" />
               </TouchableOpacity>
-            </View>
-            
-            {/* Görev Bilgisi */}
-            <View style={styles.notificationTaskInfo}>
-              <View 
-                style={[
-                  styles.notificationTaskIcon, 
-                  { backgroundColor: categoryColor }
-                ]}
-              >
-                <Icon 
-                  name={categoryIcons[selectedTask.category] || 'checkbox-marked-circle-outline'} 
-                  size={18} 
-                  color="#FFF" 
-                />
+              
+              <View style={styles.notificationModalHeaderContent}>
+                <Text style={styles.notificationModalTitle}>Bildirim Ayarla</Text>
+                <Text style={styles.notificationModalSubtitle}>{selectedTask.title}</Text>
               </View>
-              <View style={styles.notificationTaskDetails}>
-                <Text style={styles.notificationTaskTitle} numberOfLines={1}>
-                  {selectedTask.title}
-                </Text>
-                <Text style={styles.notificationTaskFrequency}>
-                  {selectedTask.frequency}
-                </Text>
-              </View>
-            </View>
+            </LinearGradient>
             
             {/* Bildirim Ayarları */}
-            <View style={styles.notificationSettings}>
+            <View style={styles.notificationModalContent}>
+              {/* Aktif bildirim varsa göster */}
+              {hasActiveNotification && (
+                <View style={[styles.activeNotificationContainer, { borderLeftColor: taskColor }]}>
+                  <View style={styles.activeNotificationHeader}>
+                    <Icon name="bell-ring" size={20} color={taskColor} />
+                    <Text style={styles.activeNotificationTitle}>Aktif Bildirim</Text>
+                  </View>
+                  
+                  <View style={styles.activeNotificationInfo}>
+                    <View style={styles.activeNotificationTime}>
+                      <Icon name="clock-outline" size={16} color="#666" />
+                      <Text style={styles.activeNotificationTimeText}>
+                        Her gün
+                      </Text>
+                    </View>
+                    
+                    <View style={styles.activeNotificationTimeValue}>
+                      <Text style={[styles.activeNotificationTimeValueText, { color: taskColor }]}>
+                        {formatTime(new Date(selectedTask.notification.time))}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+              
               {/* Bildirim Açma/Kapama */}
               <View style={styles.notificationSwitchContainer}>
                 <View style={styles.notificationSwitchLabel}>
-                  <Icon name="bell-outline" size={20} color={colors.primary} style={styles.notificationSwitchIcon} />
-                  <Text style={styles.notificationSwitchText}>
-                    Bildirimi Etkinleştir
+                  <Icon 
+                    name={notificationEnabled ? "bell-ring" : "bell-off-outline"} 
+                    size={20} 
+                    color={notificationEnabled ? taskColor : theme.textSecondary} 
+                  />
+                  <Text style={[
+                    styles.notificationSwitchText, 
+                    { color: notificationEnabled ? taskColor : theme.textSecondary }
+                  ]}>
+                    Bildirim {notificationEnabled ? "Açık" : "Kapalı"}
                   </Text>
                 </View>
+                
                 <Switch
                   value={notificationEnabled}
                   onValueChange={setNotificationEnabled}
-                  trackColor={{ false: '#E0E0E0', true: `${categoryColor}50` }}
-                  thumbColor={notificationEnabled ? categoryColor : '#FFF'}
-                  ios_backgroundColor="#E0E0E0"
+                  trackColor={{ false: '#E0E0E0', true: `${taskColor}50` }}
+                  thumbColor={notificationEnabled ? taskColor : '#FFF'}
                 />
               </View>
               
               {/* Bildirim Zamanı */}
               {notificationEnabled && (
-                <View style={styles.notificationTimeSection}>
-                  <Text style={styles.notificationTimeLabel}>
-                    Bildirim Zamanı
-                  </Text>
+                <View style={styles.notificationTimeContainer}>
+                  <Text style={styles.notificationTimeLabel}>Bildirim Zamanı</Text>
                   
-                  <TouchableOpacity 
-                    style={styles.timePickerButton}
+                  <TouchableOpacity
+                    style={[styles.notificationTimeButton, { borderColor: taskColor }]}
                     onPress={() => setShowTimePicker(true)}
                   >
-                    <Icon name="clock-outline" size={20} color={categoryColor} />
-                    <Text style={styles.timePickerButtonText}>
+                    <Icon name="clock-outline" size={18} color={taskColor} />
+                    <Text style={[styles.notificationTimeText, { color: taskColor }]}>
                       {formatTime(notificationTime)}
                     </Text>
-                    <Icon name="chevron-down" size={20} color="#999" />
+                    <Icon name="chevron-down" size={18} color={taskColor} />
                   </TouchableOpacity>
                   
-                  {Platform.OS === 'ios' ? (
-                    showTimePicker && (
-                      <View style={styles.iosTimePickerWrapper}>
+                  {/* Zaman Seçici - Boşluk ekleyelim */}
+                  {showTimePicker && (
+                    <View style={[styles.timePickerWrapper, { marginTop: 8 }]}>
+                      {Platform.OS === 'ios' ? (
+                        <CustomTimePicker
+                          value={notificationTime}
+                          onChange={(event, selectedTime) => {
+                            if (selectedTime) setNotificationTime(selectedTime);
+                          }}
+                          onClose={() => setShowTimePicker(false)}
+                          color={taskColor}
+                          textColor="#000000"
+                        />
+                      ) : (
                         <DateTimePicker
                           value={notificationTime}
                           mode="time"
-                          display="spinner"
-                          onChange={(event, selectedDate) => {
-                            if (selectedDate) {
-                              setNotificationTime(selectedDate);
-                            }
+                          is24Hour={true}
+                          display="default"
+                          onChange={(event, selectedTime) => {
+                            setShowTimePicker(false);
+                            if (selectedTime) setNotificationTime(selectedTime);
                           }}
-                          style={styles.iosTimePicker}
                         />
-                        <TouchableOpacity
-                          style={[styles.iosTimePickerDoneButton, { backgroundColor: categoryColor }]}
-                          onPress={() => setShowTimePicker(false)}
-                        >
-                          <Text style={styles.iosTimePickerDoneButtonText}>Tamam</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )
-                  ) : (
-                    showTimePicker && (
-                      <DateTimePicker
-                        value={notificationTime}
-                        mode="time"
-                        is24Hour={true}
-                        display="default"
-                        onChange={(event, selectedDate) => {
-                          setShowTimePicker(false);
-                          if (selectedDate) {
-                            setNotificationTime(selectedDate);
-                          }
-                        }}
-                      />
-                    )
+                      )}
+                    </View>
                   )}
-                  
-                  <Text style={styles.notificationHint}>
-                    Bildirim, seçilen saatte her gün tekrarlanacaktır.
+                </View>
+              )}
+              
+              {/* Bildirim Açıklaması */}
+              {notificationEnabled && (
+                <View style={styles.notificationHint}>
+                  <Icon name="information-outline" size={16} color="#999" />
+                  <Text style={styles.notificationHintText}>
+                    Bildirim, her gün seçtiğiniz saatte gönderilecektir.
                   </Text>
                 </View>
               )}
-            </View>
-            
-            {/* Modal Alt Kısım */}
-            <View style={styles.notificationModalFooter}>
-              <TouchableOpacity
-                style={styles.notificationCancelButton}
-                onPress={() => setNotificationModalVisible(false)}
-              >
-                <Text style={styles.notificationCancelButtonText}>İptal</Text>
-              </TouchableOpacity>
               
-              <TouchableOpacity
-                style={[
-                  styles.notificationSaveButton,
-                  { backgroundColor: categoryColor }
-                ]}
-                onPress={saveNotificationSettings}
-              >
-                <Text style={styles.notificationSaveButtonText}>Kaydet</Text>
-              </TouchableOpacity>
+              {/* Butonlar */}
+              <View style={styles.notificationButtonsContainer}>
+                <TouchableOpacity
+                  style={[styles.notificationButton, styles.notificationCancelButton]}
+                  onPress={() => setNotificationModalVisible(false)}
+                >
+                  <Text style={styles.notificationCancelButtonText}>İptal</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.notificationButton,
+                    styles.notificationSaveButton,
+                    { backgroundColor: taskColor }
+                  ]}
+                  onPress={handleSetNotification}
+                >
+                  <Icon name="bell" size={18} color="#FFF" />
+                  <Text style={styles.notificationSaveButtonText}>
+                    {hasActiveNotification ? "Güncelle" : "Kaydet"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -754,127 +858,177 @@ const KisiselVazifeScreen = () => {
   // Detay modalı
   const renderDetailModal = () => {
     if (!selectedTask) return null;
-
-    const categoryColor = categoryColors[selectedTask.category] || colors.primary;
-
+    
+    // Görevin kategorisine göre renk belirle
+    const taskColor = selectedTask.color || categoryColors[selectedTask.category] || colors.primary;
+    const categoryIcon = categoryIcons[selectedTask.category] || 'star-outline';
+    
     return (
       <Modal
         visible={detailModalVisible}
-        animationType="slide"
         transparent={true}
+        animationType="slide"
         onRequestClose={() => setDetailModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.detailModalContainer}>
+          <View style={[styles.detailModal, { backgroundColor: theme.card }]}>
+            {/* Modal başlık - Görevin rengini kullan */}
             <LinearGradient
-              colors={[categoryColor, `${categoryColor}CC`]}
+              colors={[taskColor, taskColor + '99']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.detailModalHeader}
             >
+              <TouchableOpacity
+                style={styles.detailModalCloseButton}
+                onPress={() => setDetailModalVisible(false)}
+              >
+                <Icon name="close" size={28} color="#FFF" />
+              </TouchableOpacity>
+              
               <View style={styles.detailModalHeaderContent}>
-                <TouchableOpacity
-                  style={styles.detailModalBackButton}
-                  onPress={() => setDetailModalVisible(false)}
-                >
-                  <Icon name="arrow-left" size={24} color="#FFF" />
-                </TouchableOpacity>
-
-                <View style={styles.detailModalHeaderInfo}>
-                  <View style={styles.detailModalCategoryBadge}>
-                    <Icon name={categoryIcons[selectedTask.category]} size={14} color="#FFF" />
-                    <Text style={styles.detailModalCategoryText}>{selectedTask.category}</Text>
-                  </View>
-
-                  <Text style={styles.detailModalTitle}>{selectedTask.title}</Text>
-
-                  <View style={styles.detailModalMeta}>
-                    <Icon name="clock-outline" size={14} color="#FFFFFF99" />
-                    <Text style={styles.detailModalMetaText}>{selectedTask.frequency}</Text>
-
-                    {selectedTask.createdAt && (
-                      <>
-                        <View style={styles.detailModalMetaDot} />
-                        <Icon name="calendar-outline" size={14} color="#FFFFFF99" />
-                        <Text style={styles.detailModalMetaText}>
-                          {formatDate(selectedTask.createdAt)}
-                        </Text>
-                      </>
-                    )}
-                  </View>
+                <Text style={styles.detailModalTitle}>{selectedTask.title}</Text>
+                
+                <View style={styles.detailModalMeta}>
+                  <Icon name={categoryIcon} size={16} color="#FFF" />
+                  <Text style={styles.detailModalMetaText}>{selectedTask.category}</Text>
+                  
+                  <View style={styles.detailModalMetaDot} />
+                  
+                  <Icon name="calendar-outline" size={16} color="#FFF" />
+                  <Text style={styles.detailModalMetaText}>{selectedTask.frequency}</Text>
+                  
+                  {selectedTask.notification && selectedTask.notification.enabled ? (
+                    <>
+                      <View style={styles.detailModalMetaDot} />
+                      <Icon name="bell-ring" size={16} color="#FFC107" />
+                      <Text style={styles.detailModalMetaText}>
+                        Her gün {new Date(selectedTask.notification.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </Text>
+                    </>
+                  ) : null}
                 </View>
               </View>
             </LinearGradient>
-
+            
+            {/* Modal içerik */}
             <View style={styles.detailModalBody}>
-              {selectedTask.description && (
+              {/* Açıklama */}
+              {selectedTask.description ? (
                 <View style={styles.detailModalSection}>
-                  <Text style={styles.detailModalSectionTitle}>Açıklama</Text>
-                  <Text style={styles.detailModalDescription}>{selectedTask.description}</Text>
+                  <Text style={[styles.detailModalSectionTitle, { color: theme.textSecondary }]}>
+                    Açıklama
+                  </Text>
+                  <Text style={[styles.detailModalDescription, { color: theme.text }]}>
+                    {selectedTask.description}
+                  </Text>
                 </View>
-              )}
-
+              ) : null}
+              
+              {/* Durum */}
               <View style={styles.detailModalSection}>
-                <Text style={styles.detailModalSectionTitle}>Durum</Text>
+                <Text style={[styles.detailModalSectionTitle, { color: theme.textSecondary }]}>
+                  Durum
+                </Text>
                 <View style={styles.detailModalStatus}>
-                  <View style={[
-                    styles.detailModalStatusIndicator,
-                    { backgroundColor: selectedTask.completed ? colors.success : colors.warning }
-                  ]} />
-                  <Text style={styles.detailModalStatusText}>
-                    {selectedTask.completed ? 'Tamamlandı' : 'Devam Ediyor'}
+                  <View 
+                    style={[
+                      styles.detailModalStatusIndicator, 
+                      { backgroundColor: selectedTask.isCompleted ? colors.success : colors.warning }
+                    ]} 
+                  />
+                  <Text style={[styles.detailModalStatusText, { color: theme.text }]}>
+                    {selectedTask.isCompleted ? 'Tamamlandı' : 'Devam Ediyor'}
                   </Text>
                 </View>
               </View>
-
-              {selectedTask.notification?.enabled && (
-                <View style={styles.detailModalSection}>
-                  <Text style={styles.detailModalSectionTitle}>Bildirim</Text>
-                  <View style={styles.detailModalNotification}>
-                    <Icon name="bell-outline" size={18} color={colors.primary} />
-                    <Text style={styles.detailModalNotificationText}>
-                      {formatTime(new Date(selectedTask.notification.time))}
-                    </Text>
-                  </View>
+              
+              {/* Bildirim */}
+              <View style={styles.detailModalSection}>
+                <Text style={[styles.detailModalSectionTitle, { color: theme.textSecondary }]}>
+                  Bildirim
+                </Text>
+                <View style={styles.detailModalNotification}>
+                  <Icon 
+                    name="bell-outline" 
+                    size={20} 
+                    color={selectedTask.notification ? colors.warning : theme.textSecondary} 
+                  />
+                  <Text style={[styles.detailModalNotificationText, { color: theme.text }]}>
+                    {selectedTask.notification ? `Her gün ${new Date(selectedTask.notification.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}` : 'Bildirim ayarlanmadı'}
+                  </Text>
                 </View>
-              )}
-
+              </View>
+              
+              {/* Aksiyon butonları */}
               <View style={styles.detailModalActions}>
                 <TouchableOpacity
-                  style={[styles.detailModalActionButton, styles.detailModalNotificationButton]}
+                  style={[
+                    styles.detailModalActionButton,
+                    {
+                      backgroundColor: selectedTask.notification?.enabled 
+                        ? '#FFC10720' 
+                        : `${taskColor}15`
+                    }
+                  ]}
                   onPress={() => {
                     setDetailModalVisible(false);
                     showNotificationSettings(selectedTask);
                   }}
                 >
-                  <Icon name="bell-outline" size={20} color={colors.primary} />
-                  <Text style={styles.detailModalActionButtonText}>Bildirim Ayarla</Text>
+                  <Icon 
+                    name={selectedTask.notification?.enabled ? "bell-ring" : "bell-outline"} 
+                    size={20} 
+                    color={selectedTask.notification?.enabled ? "#FFC107" : taskColor} 
+                  />
+                  <Text 
+                    style={[
+                      styles.detailActionButtonText, 
+                      { 
+                        color: selectedTask.notification?.enabled ? "#FFC107" : taskColor 
+                      }
+                    ]}
+                  >
+                    {selectedTask.notification?.enabled ? "Bildirimi Düzenle" : "Bildirim Ayarla"}
+                  </Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.detailModalActionButton, styles.detailModalCompleteButton]}
+                
+                <TouchableOpacity 
+                  style={[
+                    styles.detailModalActionButton, 
+                    styles.detailModalCompleteButton,
+                    { backgroundColor: selectedTask.isCompleted ? colors.warning : colors.success }
+                  ]}
                   onPress={() => {
                     toggleTaskCompletion(selectedTask.id);
                     setDetailModalVisible(false);
                   }}
                 >
-                  <Icon
-                    name={selectedTask.completed ? 'refresh' : 'check'}
-                    size={20}
-                    color="#FFF"
+                  <Icon 
+                    name={selectedTask.isCompleted ? "refresh" : "check"} 
+                    size={18} 
+                    color="#FFF" 
                   />
                   <Text style={styles.detailModalCompleteButtonText}>
-                    {selectedTask.completed ? 'Tekrar Başlat' : 'Tamamlandı'}
+                    {selectedTask.isCompleted ? 'Tekrar Başlat' : 'Tamamla'}
                   </Text>
                 </TouchableOpacity>
               </View>
-
-              <TouchableOpacity
-                style={styles.detailModalDeleteButton}
-                onPress={() => handleDeleteTask(selectedTask.id)}
+              
+              <TouchableOpacity 
+                style={[
+                  styles.detailModalDeleteButton,
+                  { borderColor: colors.error }
+                ]}
+                onPress={() => {
+                  setDetailModalVisible(false);
+                  confirmDelete(selectedTask.id);
+                }}
               >
-                <Icon name="delete-outline" size={20} color={colors.error} />
-                <Text style={styles.detailModalDeleteButtonText}>Sil</Text>
+                <Icon name="trash-can-outline" size={18} color={colors.error} />
+                <Text style={[styles.detailModalDeleteButtonText, { color: colors.error }]}>
+                  Sil
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -893,107 +1047,173 @@ const KisiselVazifeScreen = () => {
     );
   };
 
+  // Silme işlemi için onay isteyen fonksiyon
+  const confirmDelete = (taskId) => {
+    setTaskToDelete(taskId);
+    setDeleteConfirmVisible(true);
+  };
+
+  // Onay sonrası silme işlemi
+  const handleConfirmDelete = () => {
+    if (taskToDelete) {
+      deleteTask(taskToDelete);
+      setDeleteConfirmVisible(false);
+      setTaskToDelete(null);
+    }
+  };
+
+  // Silme işlemini iptal etme
+  const cancelDelete = () => {
+    setDeleteConfirmVisible(false);
+    setTaskToDelete(null);
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <StatusBar 
-        barStyle="light-content" 
-        backgroundColor={colors.primary} 
-        translucent={true}
-      />
-      
-      <View style={styles.container}>
-        {renderHeader()}
-        
-        {/* Arama Çubuğu */}
-        <View style={styles.searchContainer}>
-          <View style={styles.searchBar}>
-            <Icon name="magnify" size={20} color="#666666" />
-            <TextInput
-              style={styles.searchInput}
-              placeholder="Vazife ara..."
-              placeholderTextColor="#999999"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Icon name="close-circle" size={18} color="#666666" />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-        
-        {/* Filtreler */}
-        <View style={styles.filtersContainer}>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filtersScrollContent}
-          >
-            {['Tümü', 'Günlük', 'Haftalık', 'Aylık'].map((filter) => (
-              <TouchableOpacity
-                key={filter}
-                style={[
-                  styles.filterButton,
-                  activeFilter === filter && styles.activeFilterButton
-                ]}
-                onPress={() => setActiveFilter(filter)}
-              >
-                <Text 
-                  style={[
-                    styles.filterButtonText,
-                    activeFilter === filter && styles.activeFilterButtonText
-                  ]}
-                >
-                  {filter}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
-        
-        {/* Görev Listesi */}
-        <FlatList
-          data={filteredTasks}
-          renderItem={renderTaskItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.taskList}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={renderEmptyList}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: false }
-          )}
-        />
-        
-        {/* Yeni görev ekleme butonu */}
-        <TouchableOpacity 
-          style={styles.addTaskButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <LinearGradient
-            colors={[colors.primary, colors.secondary]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.addButtonGradient}
-          >
-            <Icon name="plus" size={24} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-        
-        {/* Görev ekleme/düzenleme modalı */}
-        <TaskFormModal 
-          visible={modalVisible}
-          onClose={() => setModalVisible(false)}
-          onSave={handleAddTask}
-          initialTask={selectedTask}
-          theme={theme}
+    <View style={{ flex: 1 }}>
+      {/* Gradient arka plan için */}
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 70 }}>
+        <LinearGradient
+          colors={[colors.primary, colors.secondary]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={{ flex: 1 }}
         />
       </View>
       
+      <SafeAreaView style={{ flex: 1 }}>
+        <StatusBar 
+          barStyle="light-content" 
+          backgroundColor="transparent" 
+          translucent={true} 
+        />
+        
+        <View style={styles.container}>
+          {renderHeader()}
+          
+          {/* Arama Çubuğu */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchBar}>
+              <Icon name="magnify" size={20} color="#666666" />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Vazife ara..."
+                placeholderTextColor="#999999"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Icon name="close-circle" size={18} color="#666666" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+          
+          {/* Filtreler */}
+          <View style={styles.filtersContainer}>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filtersScrollContent}
+            >
+              {['Tümü', 'Günlük', 'Haftalık', 'Aylık'].map((filter) => (
+                <TouchableOpacity
+                  key={filter}
+                  style={[
+                    styles.filterButton,
+                    activeFilter === filter && styles.activeFilterButton
+                  ]}
+                  onPress={() => setActiveFilter(filter)}
+                >
+                  <Text 
+                    style={[
+                      styles.filterButtonText,
+                      activeFilter === filter && styles.activeFilterButtonText
+                    ]}
+                  >
+                    {filter}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+          
+          {/* Görev Listesi */}
+          <FlatList
+            data={filteredTasks}
+            renderItem={renderTaskItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.taskList}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={renderEmptyList}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+              { useNativeDriver: false }
+            )}
+          />
+          
+          {/* Yeni görev ekleme butonu */}
+          <TouchableOpacity 
+            style={styles.addTaskButton}
+            onPress={() => setModalVisible(true)}
+          >
+            <LinearGradient
+              colors={[colors.primary, colors.secondary]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.addButtonGradient}
+            >
+              <Icon name="plus" size={24} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+          
+          {/* Görev ekleme/düzenleme modalı */}
+          <TaskFormModal 
+            visible={modalVisible}
+            onClose={() => setModalVisible(false)}
+            onSave={handleAddTask}
+            initialTask={selectedTask}
+            theme={theme}
+          />
+        </View>
+      </SafeAreaView>
+      
       {renderNotificationModal()}
       {renderDetailModal()}
-    </SafeAreaView>
+
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.confirmModal, { backgroundColor: theme.card }]}>
+            <Icon name="alert-circle-outline" size={40} color="#FF6584" style={styles.confirmIcon} />
+            <Text style={[styles.confirmTitle, { color: theme.text }]}>Emin misiniz?</Text>
+            <Text style={[styles.confirmText, { color: theme.textSecondary }]}>
+              Bu vazife kalıcı olarak silinecek. Bu işlem geri alınamaz.
+            </Text>
+            
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity 
+                style={[styles.confirmButton, styles.cancelButton]} 
+                onPress={cancelDelete}
+              >
+                <Text style={styles.cancelButtonText}>Vazgeç</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.confirmButton, styles.deleteButton]} 
+                onPress={handleConfirmDelete}
+              >
+                <Text style={styles.deleteButtonText}>Sil</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 };
 
@@ -1009,50 +1229,55 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 70 : StatusBar.currentHeight + 30,
+    paddingTop: Platform.OS === 'ios' ? 30 : StatusBar.currentHeight + 10,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 15,
     borderBottomRightRadius: 20,
     borderBottomLeftRadius: 20,
   },
   headerContent: {
-    flex: 1,
     justifyContent: 'space-between',
+    height: '100%',
   },
   headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    marginBottom: 10,
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FFF',
-    marginBottom: 4,
+    marginBottom: 5,
   },
   headerDate: {
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.8)',
     fontWeight: '500',
+    marginBottom: 5,
   },
   headerStats: {
     flexDirection: 'row',
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    borderRadius: 12,
+    borderRadius: 10,
     paddingVertical: 8,
     paddingHorizontal: 12,
+    alignSelf: 'flex-start',
+    marginTop: 5,
   },
   headerStatItem: {
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
   },
   headerStatNumber: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#FFF',
+    marginBottom: 2,
   },
   headerStatLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: 'rgba(255, 255, 255, 0.8)',
   },
   headerStatDivider: {
@@ -1227,9 +1452,10 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    padding: 20,
   },
   addButtonGradient: {
     width: '100%',
@@ -1271,230 +1497,170 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#FFF',
   },
-  notificationModalContainer: {
-    width: '100%',
-    maxWidth: 340,
-    backgroundColor: '#FFF',
-    borderRadius: 16,
+  notificationModal: {
+    width: '85%',
+    maxHeight: height * 0.7,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.2,
     shadowRadius: 15,
     elevation: 10,
   },
   notificationModalHeader: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+  },
+  notificationModalHeaderContent: {
+    flex: 1,
+    marginLeft: 8,
   },
   notificationModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  notificationModalCloseButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#F5F7FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationTaskInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  notificationTaskIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  notificationTaskDetails: {
-    flex: 1,
-  },
-  notificationTaskTitle: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    marginBottom: 4,
+    fontWeight: 'bold',
+    color: '#FFF',
   },
-  notificationTaskFrequency: {
-    fontSize: 13,
-    color: '#666',
+  notificationModalSubtitle: {
+    fontSize: 12,
+    color: '#FFFFFF99',
+    marginTop: 2,
   },
-  notificationSettings: {
-    padding: 16,
+  notificationModalContent: {
+    padding: 12,
   },
   notificationSwitchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+    backgroundColor: '#F5F7FA',
+    padding: 10,
+    borderRadius: 8,
   },
   notificationSwitchLabel: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  notificationSwitchIcon: {
-    marginRight: 8,
-  },
   notificationSwitchText: {
-    fontSize: 15,
-    color: '#333',
-  },
-  notificationTimeSection: {
-    marginTop: 8,
-  },
-  notificationTimeLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#666',
-    marginBottom: 8,
+    marginLeft: 8,
   },
-  timePickerButton: {
+  notificationTimeContainer: {
+    marginBottom: 12,
+  },
+  notificationTimeLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#666',
+    marginBottom: 6,
+  },
+  notificationTimeButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#F5F7FA',
+    padding: 10,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
     borderWidth: 1,
     borderColor: '#E0E0E0',
   },
-  timePickerButtonText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#333',
-    marginLeft: 8,
+  notificationTimeText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   notificationHint: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  iosTimePickerWrapper: {
-    marginTop: 12,
-    backgroundColor: '#F5F7FA',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  iosTimePicker: {
-    height: 180,
-  },
-  iosTimePickerDoneButton: {
-    alignSelf: 'flex-end',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  iosTimePickerDoneButtonText: {
-    color: '#FFF',
-    fontWeight: '500',
-    fontSize: 14,
-  },
-  notificationModalFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
+    alignItems: 'center',
+    backgroundColor: '#F5F7FA',
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  notificationHintText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 6,
+    flex: 1,
+  },
+  notificationButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  notificationButton: {
+    flex: 1,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexDirection: 'row',
   },
   notificationCancelButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
     backgroundColor: '#F5F7FA',
-    marginRight: 10,
+    marginRight: 8,
   },
   notificationCancelButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#666',
   },
   notificationSaveButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
+    backgroundColor: '#4A6FFF',
   },
   notificationSaveButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFF',
-  },
-  detailModalContainer: {
-    width: '90%',
-    maxWidth: 400,
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.2,
-    shadowRadius: 15,
-    elevation: 10,
-    maxHeight: '80%',
-  },
-  detailModalHeader: {
-    padding: 20,
-  },
-  detailModalHeaderContent: {
-    paddingTop: 20,
-  },
-  detailModalBackButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  detailModalHeaderInfo: {
-    marginBottom: 20,
-  },
-  detailModalCategoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    alignSelf: 'flex-start',
-    marginBottom: 10,
-  },
-  detailModalCategoryText: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
     color: '#FFF',
     marginLeft: 6,
   },
+  detailModal: {
+    width: '90%',
+    maxHeight: '65%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  detailModalHeader: {
+    padding: 16,
+    paddingBottom: 20,
+  },
+  detailModalCloseButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  detailModalHeaderContent: {
+    marginTop: 10,
+  },
   detailModalTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#FFF',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   detailModalMeta: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   detailModalMetaText: {
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(255, 255, 255, 0.8)',
     marginLeft: 6,
     marginRight: 12,
@@ -1510,45 +1676,48 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   detailModalSection: {
-    marginBottom: 20,
+    marginBottom: 14,
   },
   detailModalSectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#666',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   detailModalDescription: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#333',
-    lineHeight: 24,
+    lineHeight: 20,
   },
   detailModalStatus: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 3,
   },
   detailModalStatusIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     marginRight: 8,
   },
   detailModalStatusText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#333',
   },
   detailModalNotification: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 3,
   },
   detailModalNotificationText: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#333',
     marginLeft: 8,
   },
   detailModalActions: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 12,
+    marginTop: 6,
   },
   detailModalActionButton: {
     flex: 1,
@@ -1557,10 +1726,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     borderRadius: 8,
-    marginRight: 10,
+    marginRight: 8,
   },
-  detailModalNotificationButton: {
-    backgroundColor: '#F5F7FA',
+  detailActionButtonText: {
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 6,
   },
   detailModalCompleteButton: {
     backgroundColor: '#4CAF50',
@@ -1579,12 +1750,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#F44336',
+    marginTop: 4,
   },
   detailModalDeleteButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: '#F44336',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   completedTaskCard: {
     opacity: 0.9,
@@ -1602,7 +1774,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    marginLeft: 6,
     marginBottom: 4,
   },
   frequencyBadgeText: {
@@ -1615,7 +1786,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
-    marginLeft: 6,
     marginBottom: 4,
   },
   notificationBadgeText: {
@@ -1680,6 +1850,138 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
     zIndex: -1,
+    marginBottom: 10,
+  },
+  confirmModal: {
+    width: '90%',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  confirmIcon: {
+    marginBottom: 15,
+  },
+  confirmTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  confirmText: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  confirmButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  confirmButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 10,
+    minWidth: '45%',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F5F7FA',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontWeight: '500',
+  },
+  deleteButton: {
+    backgroundColor: '#FF6584',
+  },
+  deleteButtonText: {
+    color: '#FFF',
+    fontWeight: '500',
+  },
+  iosTimePickerContainer: {
+    marginTop: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    width: '90%',
+    alignSelf: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  iosTimePicker: {
+    height: 180,
+  },
+  iosTimePickerDoneButton: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  iosTimePickerDoneButtonText: {
+    color: '#FFF',
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  activeNotificationContainer: {
+    backgroundColor: '#F5F7FA',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#4A6FFF',
+  },
+  activeNotificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  activeNotificationTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginLeft: 8,
+  },
+  activeNotificationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeNotificationTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  activeNotificationTimeText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  activeNotificationTimeValue: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  activeNotificationTimeValueText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  timePickerWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
     marginBottom: 10,
   },
 });

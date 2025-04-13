@@ -1,16 +1,16 @@
 import axios from 'axios';
 
 // OpenRouter API anahtarınız
-const OPENROUTER_API_KEY = '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';
+const OPENROUTER_API_KEY = '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';
 //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'
-
+//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
 // Görev önerileri almak için yapay zeka servisini çağırır
 export const getAISuggestions = async (userInput) => {
   try {
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'anthropic/claude-3-haiku',
+        model: 'openai/gpt-4o',
         messages: [
           {
             role: 'system',
