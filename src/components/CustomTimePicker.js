@@ -1,6 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const CustomTimePicker = ({ 
@@ -10,6 +9,20 @@ const CustomTimePicker = ({
   color = '#4A6FFF',
   textColor = '#000000'
 }) => {
+  const [selectedHour, setSelectedHour] = useState(value.getHours());
+  const [selectedMinute, setSelectedMinute] = useState(value.getMinutes());
+  
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const minutes = Array.from({ length: 60 }, (_, i) => i);
+  
+  const handleConfirm = () => {
+    const newDate = new Date(value);
+    newDate.setHours(selectedHour);
+    newDate.setMinutes(selectedMinute);
+    onChange({ type: 'set', nativeEvent: { timestamp: newDate.getTime() } });
+    onClose();
+  };
+  
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -23,14 +36,56 @@ const CustomTimePicker = ({
       </View>
       
       <View style={styles.content}>
-        <DateTimePicker
-          value={value}
-          mode="time"
-          display="spinner"
-          onChange={onChange}
-          style={styles.picker}
-          textColor={textColor}
-        />
+        <View style={styles.pickerContainer}>
+          <ScrollView style={styles.pickerColumn}>
+            {hours.map(hour => (
+              <TouchableOpacity
+                key={`hour-${hour}`}
+                style={[
+                  styles.pickerItem,
+                  selectedHour === hour && { backgroundColor: `${color}20` }
+                ]}
+                onPress={() => setSelectedHour(hour)}
+              >
+                <Text style={[
+                  styles.pickerItemText,
+                  selectedHour === hour && { color, fontWeight: 'bold' }
+                ]}>
+                  {hour.toString().padStart(2, '0')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          
+          <Text style={styles.pickerSeparator}>:</Text>
+          
+          <ScrollView style={styles.pickerColumn}>
+            {minutes.map(minute => (
+              <TouchableOpacity
+                key={`minute-${minute}`}
+                style={[
+                  styles.pickerItem,
+                  selectedMinute === minute && { backgroundColor: `${color}20` }
+                ]}
+                onPress={() => setSelectedMinute(minute)}
+              >
+                <Text style={[
+                  styles.pickerItemText,
+                  selectedMinute === minute && { color, fontWeight: 'bold' }
+                ]}>
+                  {minute.toString().padStart(2, '0')}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+        
+        <TouchableOpacity
+          style={[styles.confirmButton, { backgroundColor: color }]}
+          onPress={handleConfirm}
+        >
+          <Text style={styles.confirmButtonText}>Tamam</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -79,12 +134,39 @@ const styles = StyleSheet.create({
   content: {
     alignItems: 'center',
     justifyContent: 'center',
-    height: 100,
+    padding: 10,
   },
-  picker: {
-    height: 90,
-    width: '100%',
-    transform: [{ scale: 0.65 }],
+  pickerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 150,
+  },
+  pickerColumn: {
+    height: 150,
+    width: 60,
+  },
+  pickerItem: {
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  pickerItemText: {
+    fontSize: 18,
+  },
+  pickerSeparator: {
+    fontSize: 24,
+    marginHorizontal: 10,
+  },
+  confirmButton: {
+    marginTop: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  confirmButtonText: {
+    color: '#FFF',
+    fontWeight: '500',
   }
 });
 

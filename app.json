@@ -1,33 +1,36 @@
 {
   "expo": {
-    "name": "Vazife",
-    "slug": "vazife-app",
+    "name": "Vazife App",
+    "slug": "TaskManagement",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "updates": {
-      "fallbackToCacheTimeout": 0
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#1E90FF"
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourcompany.vazife"
+      "bundleIdentifier": "com.yourcompany.vazifeapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.yourcompany.vazife"
+      "package": "com.yourcompany.vazifeapp"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -36,6 +39,7 @@
       "eas": {
         "projectId": "492a97aa-3f31-43c3-a5c9-f28fcddd9a18"
       }
-    }
+    },
+    "owner": "mtuyarr"
   }
 }

@@ -9,13 +9,15 @@ import {
   Keyboard, 
   SafeAreaView, 
   StatusBar,
-  Platform
+  Platform,
+  AsyncStorage
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useTaskContext } from '../context/TaskContext';
 import { getAISuggestions } from '../services/aiService';
 import { useTheme } from '../context/ThemeContext';
+import { Picker } from '@react-native-picker/picker';
 
 // Bileşenler
 import AIInputBox from '../components/AIScreen/AIInputBox';
@@ -31,6 +33,7 @@ const YapayZekaScreen = () => {
   const [selectedFrequency, setSelectedFrequency] = useState('Günlük');
   const { addAISuggestionToTasks } = useTaskContext();
   const { theme, isDarkMode } = useTheme();
+  const [selectedCategory, setSelectedCategory] = useState('Kişisel');
 
   // Renk paleti tanımlayalım
   const colors = {
@@ -71,6 +74,26 @@ const YapayZekaScreen = () => {
     colors.accent,     // Vurgu Mavi
     colors.info        // Bilgi Mavisi
   ];
+
+  // Kategori renkleri
+  const categoryColors = {
+    'Kişisel': '#4A6FFF',
+    'İş': '#6C63FF',
+    'Sağlık': '#4CAF50',
+    'Eğitim': '#FF9800',
+    'Alışveriş': '#E91E63',
+    'Diğer': '#607D8B'
+  };
+
+  // Kategori ikonları
+  const categoryIcons = {
+    'Kişisel': 'account-outline',
+    'İş': 'briefcase-outline',
+    'Sağlık': 'heart-pulse',
+    'Eğitim': 'school-outline',
+    'Alışveriş': 'cart-outline',
+    'Diğer': 'dots-horizontal-circle-outline'
+  };
 
   // Kategori bazlı renk seçimi fonksiyonu - dengeli dağılım
   const getCategoryColor = (category, index = 0) => {
@@ -253,7 +276,7 @@ const styles = StyleSheet.create({
   headerGradient: {
     paddingTop: Platform.OS === 'ios' ? 60 : StatusBar.currentHeight + 30,
     paddingHorizontal: 20,
-    paddingBottom: 30,
+    paddingBottom: 40,
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
@@ -264,7 +287,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 8,
+
   },
   headerSubtitle: {
     fontSize: 15,

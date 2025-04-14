@@ -10,31 +10,31 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Bildirim izinlerini kontrol et ve gerekirse iste
+// Bildirim izinlerini kontrol et ve iste
 export const registerForPushNotificationsAsync = async () => {
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
-    
+
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
     }
-    
+
     if (finalStatus !== 'granted') {
       console.log('Bildirim izni alınamadı!');
       return false;
     }
-    
+
     if (Platform.OS === 'android') {
-      Notifications.setNotificationChannelAsync('default', {
+      await Notifications.setNotificationChannelAsync('default', {
         name: 'default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
         lightColor: '#FF231F7C',
       });
     }
-    
+
     return true;
   } catch (error) {
     console.error('Bildirim izni alınırken hata oluştu:', error);
@@ -42,49 +42,51 @@ export const registerForPushNotificationsAsync = async () => {
   }
 };
 
-// Bildirim planla
-export const scheduleNotification = async ({ id, title, body, data, time, repeat = false }) => {
+// Günlük tekrar eden bildirim ayarla
+export const scheduleNotification = async (task, time) => {
   try {
-    // Zaman kontrolü
-    if (!time || !(time instanceof Date) || isNaN(time.getTime())) {
-      console.error("Geçersiz bildirim zamanı:", time);
-      throw new Error("Geçersiz bildirim zamanı");
+    // Daha önce ayarlanmış bildirim varsa iptal et
+    if (task.notificationId) {
+      await cancelNotification(task.notificationId);
     }
-    
-    console.log("Bildirim planlanıyor:", { id, title, body, time: time.toISOString(), repeat });
-    
-    // Bildirim içeriğini oluştur
+
+    const now = new Date();
+    const notificationTime = new Date(time);
+
+    // Geçmiş zaman verildiyse, yarına al
+    if (notificationTime <= now) {
+      notificationTime.setDate(notificationTime.getDate() + 1);
+    }
+
+    const hours = notificationTime.getHours();
+    const minutes = notificationTime.getMinutes();
+
     const notificationContent = {
-      title,
-      body,
-      data: data || {},
+      title: `Hatırlatma: ${task.title}`,
+      body: task.description || 'Vazifeyi tamamlamayı unutmayın!',
+      data: { taskId: task.id },
     };
-    
-    // Bildirim tetikleyicisini oluştur
+
     const trigger = {
-      hour: time.getHours(),
-      minute: time.getMinutes(),
-      repeats: repeat
+      hour: hours,
+      minute: minutes,
+      repeats: true, // her gün tekrar et
     };
-    
-    console.log("Bildirim tetikleyicisi:", trigger);
-    
-    // Bildirimi planla
+
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: notificationContent,
-      trigger,
-      identifier: id
+      trigger: trigger,
     });
-    
-    console.log("Bildirim başarıyla planlandı, ID:", notificationId);
+
+    console.log(`Günlük bildirim ayarlandı: ${notificationId}, Saat: ${hours}:${minutes}`);
     return notificationId;
   } catch (error) {
-    console.error("Bildirim planlanırken hata oluştu:", error);
-    throw error;
+    console.error('Bildirim ayarlanırken hata oluştu:', error);
+    return null;
   }
 };
 
-// Bildirimi iptal et
+// Bildirim iptali
 export const cancelNotification = async (notificationId) => {
   try {
     await Notifications.cancelScheduledNotificationAsync(notificationId);
@@ -92,44 +94,6 @@ export const cancelNotification = async (notificationId) => {
     return true;
   } catch (error) {
     console.error('Bildirim iptal edilirken hata oluştu:', error);
-    throw error;
+    return false;
   }
 };
-
-// Tüm bildirimleri iptal et
-export const cancelAllNotifications = async () => {
-  try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-    console.log('Tüm bildirimler iptal edildi');
-    return true;
-  } catch (error) {
-    console.error('Tüm bildirimler iptal edilirken hata oluştu:', error);
-    throw error;
-  }
-};
-
-// Planlanmış bildirimleri getir
-export const getScheduledNotifications = async () => {
-  try {
-    const notifications = await Notifications.getAllScheduledNotificationsAsync();
-    return notifications;
-  } catch (error) {
-    console.error('Planlanmış bildirimler alınırken hata oluştu:', error);
-    throw error;
-  }
-};
-
-// Bildirimleri dinle
-export const addNotificationReceivedListener = (callback) => {
-  return Notifications.addNotificationReceivedListener(callback);
-};
-
-// Bildirime tıklanma olayını dinle
-export const addNotificationResponseReceivedListener = (callback) => {
-  return Notifications.addNotificationResponseReceivedListener(callback);
-};
-
-// Dinleyicileri kaldır
-export const removeNotificationSubscription = (subscription) => {
-  subscription && Notifications.removeNotificationSubscription(subscription);
-}; 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -323,11 +323,21 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginRight: 6,
     position: 'relative',
-    elevation: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 1,
+      },
+      android: {
+        elevation: 0,
+        backgroundColor: 'transparent',
+      }
+    }),
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   completeButtonInner: {
     flexDirection: 'row',
@@ -354,6 +364,13 @@ const styles = StyleSheet.create({
   completedTaskItem: {
     backgroundColor: '#F9FFF9',
     opacity: 0.9,
+    ...Platform.select({
+      android: {
+        borderWidth: 0,
+        elevation: 0,
+        backgroundColor: '#F9FFF9',
+      }
+    })
   },
   completedTaskTitle: {
     textDecorationLine: 'line-through',
