@@ -20,6 +20,7 @@ import { useTheme } from '../context/ThemeContext';
 import { Picker } from '@react-native-picker/picker';
 
 // Bileşenler
+import AppHeader from '../components/AppHeader';
 import AIInputBox from '../components/AIScreen/AIInputBox';
 import AISuggestionItem from '../components/AIScreen/AISuggestionItem';
 import AIDetailModal from '../components/AIScreen/AIDetailModal';
@@ -172,39 +173,16 @@ const YapayZekaScreen = () => {
     Keyboard.dismiss();
   };
 
-  // Header bileşeni
-  const renderHeader = () => {
-    return (
-      <View style={styles.header}>
-        <LinearGradient
-          colors={[colors.primary, colors.secondary, colors.accent]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
-          <View style={styles.headerContent}>
-            <Text style={styles.headerTitle}>Yapay Zeka Asistanı</Text>
-            <Text style={styles.headerSubtitle}>
-              Hedeflerinize uygun alışkanlık önerileri alın
-            </Text>
-            <View style={styles.headerIconContainer}>
-              <Icon name="robot" size={60} color="rgba(255, 255, 255, 0.2)" />
-            </View>
-          </View>
-        </LinearGradient>
-      </View>
-    );
-  };
+
 
   return (
     <View style={styles.container}>
-      <StatusBar 
-        barStyle="light-content" 
-        backgroundColor={colors.primary} 
-        translucent={true}
+      <AppHeader
+        title="Yapay Zeka Asistanı"
+        subtitle="Hedeflerinize uygun alışkanlık önerileri alın"
+        iconName="robot"
+        colors={[colors.primary, colors.secondary, colors.accent]}
       />
-      
-      {renderHeader()}
       
       <TouchableWithoutFeedback onPress={dismissKeyboard}>
         <View style={styles.content}>
@@ -268,37 +246,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     paddingTop: 0,
-  },
-  header: {
-    width: '100%',
-    overflow: 'hidden',
-  },
-  headerGradient: {
-    paddingTop: Platform.OS === 'ios' ? 60 : StatusBar.currentHeight + 30,
-    paddingHorizontal: 20,
-    paddingBottom: 40,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-  },
-  headerContent: {
-    position: 'relative',
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-
-  },
-  headerSubtitle: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.8)',
-    maxWidth: '80%',
-    lineHeight: 22,
-  },
-  headerIconContainer: {
-    position: 'absolute',
-    right: 0,
-    top: -10,
   },
   content: {
     flex: 1,

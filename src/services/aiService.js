@@ -1,21 +1,28 @@
 import axios from 'axios';
 
 // OpenRouter API anahtarınız 
-const OPENROUTER_API_KEY = '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';
+const OPENROUTER_API_KEY = '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';
 //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'
 //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
 //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
+
+// Alternatif modeller
+// 'anthropic/claude-3-haiku:free'
+// 'anthropic/claude-3-sonnet:free'
+// 'meta-llama/llama-3-8b-instruct:free'
+// 'mistralai/mistral-7b-instruct:free'
+
 // Görev önerileri almak için yapay zeka servisini çağırır
 export const getAISuggestions = async (userInput) => {
   try {
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
       {
-        model: 'anthropic/claude-3-haiku:free',
+        model: 'tngtech/deepseek-r1t2-chimera:free',
         messages: [
           {
             role: 'system',
-            content: `Sen bir kişisel gelişim ve alışkanlık uzmanısın. Kullanıcının hedeflerine uygun, bilimsel olarak kanıtlanmış, ölçülebilir ve gerçekçi alışkanlık önerileri sun.
+            content: `Sen bir kişisel gelişim ve alışkanlık uzmanısın. Kullanıcının hedeflerine uygun, ölçülebilir ve gerçekçi alışkanlık önerileri sun.
 
 SADECE aşağıdaki JSON formatında 6 adet öneri ver. Başka hiçbir açıklama veya metin ekleme, SADECE JSON dizisi döndür:
 [
@@ -50,6 +57,7 @@ Icon seçenekleri (kategori ile uyumlu olmalı):
         temperature: 0.3,
         max_tokens: 1500,
         noprompttraining: true
+
       },
       {
         headers: {
@@ -101,19 +109,45 @@ Icon seçenekleri (kategori ile uyumlu olmalı):
     
   } catch (error) {
     console.error('AI API Hatası:', error);
+    
+    let errorMessage = 'Öneriler alınırken bir hata oluştu.';
+    let errorTitle = 'Bağlantı Hatası';
+    
     if (error.response) {
       // Sunucudan gelen yanıt
       console.error('Yanıt verisi:', error.response.data);
       console.error('Yanıt durumu:', error.response.status);
-      console.error('Yanıt başlıkları:', error.response.headers);
+      
+      if (error.response.status === 401) {
+        errorTitle = 'Yetkilendirme Hatası';
+        errorMessage = 'API yetkilendirme hatası. Lütfen daha sonra tekrar deneyin.';
+      } else if (error.response.status === 404) {
+        errorTitle = 'Model Hatası';
+        errorMessage = 'Seçilen model şu anda kullanılamıyor. Lütfen daha sonra tekrar deneyin.';
+        
+        // Veri politikası hatası için özel mesaj
+        if (error.response.data?.error?.message?.includes('data policy')) {
+          errorMessage = 'Veri politikası ayarları nedeniyle model kullanılamıyor.';
+        }
+      } else if (error.response.status === 429) {
+        errorTitle = 'Çok Fazla İstek';
+        errorMessage = 'Çok fazla istek gönderildi. Lütfen biraz bekleyin ve tekrar deneyin.';
+      }
     } else if (error.request) {
-      // İstek yapıldı ama yanıt alınamadı
-      console.error('İstek yapıldı ama yanıt alınamadı:', error.request);
-    } else {
-      // İstek oluşturulurken bir şeyler yanlış gitti
-      console.error('Hata mesajı:', error.message);
+      errorMessage = 'Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edin.';
     }
-    return [];
+    
+    // Hata durumunda kullanıcıya gösterilecek bir öneri döndür
+    return [{ 
+      id: `error-${Date.now()}`,
+      title: errorTitle,
+      category: 'Hata',
+      icon: 'alert-circle',
+      description: errorMessage,
+      frequency: 'Günlük',
+      completed: false,
+      source: 'error'
+    }];
   }
 };
 

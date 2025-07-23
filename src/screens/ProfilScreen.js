@@ -1,103 +1,107 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Switch, ScrollView } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useTheme } from '../../src/context/ThemeContext';
+import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
+import AppHeader from '../components/AppHeader';
 
 const ProfilScreen = () => {
-  const { theme, isDarkMode, toggleTheme } = useTheme();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const { theme } = useTheme();
+  const { user, userProfile, signOut } = useAuth();
+  
+  const handleLogout = () => {
+    Alert.alert(
+      'Çıkış Yap',
+      'Hesabınızdan çıkmak istediğinizden emin misiniz?',
+      [
+        { text: 'İptal', style: 'cancel' },
+        { 
+          text: 'Çıkış Yap', 
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await signOut();
+            if (error) {
+              Alert.alert('Hata', 'Çıkış yapılırken bir hata oluştu');
+            }
+          }
+        },
+      ]
+    );
+  };
   
   return (
-    <ScrollView style={[styles.container, { backgroundColor: theme.background }]}>
-      <View style={[styles.header, { backgroundColor: theme.card }]}>
-        <Image 
-          source={{ uri: 'https://randomuser.me/api/portraits/men/32.jpg' }} 
-          style={styles.profileImage} 
-        />
-        <Text style={[styles.name, { color: theme.text }]}>Ahmet Yılmaz</Text>
-        <Text style={[styles.email, { color: theme.textSecondary }]}>ahmet.yilmaz@example.com</Text>
-        
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.text }]}>42</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Tamamlanan</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.text }]}>7</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Günlük Seri</Text>
-          </View>
-          <View style={[styles.statDivider, { backgroundColor: theme.border }]} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: theme.text }]}>85%</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Başarı</Text>
-          </View>
-        </View>
-      </View>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      <AppHeader
+        title="Profil"
+        subtitle="Hesap ayarlarınızı görüntüleyin.."
+        iconName="account-circle"
+        colors={['#4A6FFF', '#6C63FF', '#8A84FF']}
+      />
       
-      <View style={styles.menuContainer}>
-        <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
-          <Icon name="bell-outline" size={24} color={theme.icon} style={styles.menuIcon} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Bildirimler</Text>
-          <View style={styles.menuValue}>
-            <Switch 
-              value={notificationsEnabled} 
-              onValueChange={() => setNotificationsEnabled(prev => !prev)}
-              trackColor={{ false: '#767577', true: theme.primary + '50' }}
-              thumbColor={notificationsEnabled ? theme.primary : '#f4f3f4'}
-            />
-          </View>
+      <ScrollView style={styles.content}>
+        <View style={[styles.header, { backgroundColor: theme.card }]}>
+          <Image 
+            source={{ 
+              uri: userProfile?.avatar_url || 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' 
+            }} 
+            style={styles.profileImage} 
+          />
+          <Text style={[styles.name, { color: theme.text }]}>
+            {userProfile?.display_name || 'Kullanıcı'}
+          </Text>
+          <Text style={[styles.email, { color: theme.textSecondary }]}>
+            {user?.email || 'email@example.com'}
+          </Text>
+          
+
         </View>
         
-        <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
-          <Icon name="theme-light-dark" size={24} color={theme.icon} style={styles.menuIcon} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Karanlık Mod</Text>
-          <View style={styles.menuValue}>
-            <Switch 
-              value={isDarkMode} 
-              onValueChange={toggleTheme}
-              trackColor={{ false: '#767577', true: theme.primary + '50' }}
-              thumbColor={isDarkMode ? theme.primary : '#f4f3f4'}
-            />
+        <View style={styles.menuContainer}>
+          
+          <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
+            <Icon name="cog-outline" size={24} color={theme.icon} style={styles.menuIcon} />
+            <Text style={[styles.menuText, { color: theme.text }]}>Ayarlar</Text>
+            <View style={styles.menuValue}>
+              <Icon name="chevron-right" size={24} color={theme.icon} />
+            </View>
           </View>
-        </View>
-        
-        <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
-          <Icon name="cog-outline" size={24} color={theme.icon} style={styles.menuIcon} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Ayarlar</Text>
-          <View style={styles.menuValue}>
-            <Icon name="chevron-right" size={24} color={theme.icon} />
+          
+          <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
+            <Icon name="help-circle-outline" size={24} color={theme.icon} style={styles.menuIcon} />
+            <Text style={[styles.menuText, { color: theme.text }]}>Yardım</Text>
+            <View style={styles.menuValue}>
+              <Icon name="chevron-right" size={24} color={theme.icon} />
+            </View>
           </View>
-        </View>
-        
-        <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
-          <Icon name="help-circle-outline" size={24} color={theme.icon} style={styles.menuIcon} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Yardım</Text>
-          <View style={styles.menuValue}>
-            <Icon name="chevron-right" size={24} color={theme.icon} />
+          
+          <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
+            <Icon name="information-outline" size={24} color={theme.icon} style={styles.menuIcon} />
+            <Text style={[styles.menuText, { color: theme.text }]}>Hakkında</Text>
+            <View style={styles.menuValue}>
+              <Icon name="chevron-right" size={24} color={theme.icon} />
+            </View>
           </View>
+          
+          <TouchableOpacity 
+            style={[styles.menuItem, styles.logoutItem]}
+            onPress={handleLogout}
+          >
+            <Icon name="logout" size={24} color="#F44336" style={styles.menuIcon} />
+            <Text style={[styles.menuText, styles.logoutText]}>Çıkış Yap</Text>
+          </TouchableOpacity>
         </View>
-        
-        <View style={[styles.menuItem, { borderBottomColor: theme.border }]}>
-          <Icon name="information-outline" size={24} color={theme.icon} style={styles.menuIcon} />
-          <Text style={[styles.menuText, { color: theme.text }]}>Hakkında</Text>
-          <View style={styles.menuValue}>
-            <Icon name="chevron-right" size={24} color={theme.icon} />
-          </View>
-        </View>
-        
-        <TouchableOpacity style={[styles.menuItem, styles.logoutItem]}>
-          <Icon name="logout" size={24} color="#F44336" style={styles.menuIcon} />
-          <Text style={[styles.menuText, styles.logoutText]}>Çıkış Yap</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  content: {
+    flex: 1,
+    paddingTop: 20,
   },
   header: {
     alignItems: 'center',
@@ -109,6 +113,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 8,
     elevation: 4,
+    marginHorizontal: 16,
+    marginBottom: 20,
   },
   profileImage: {
     width: 100,
@@ -125,29 +131,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 24,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    width: '100%',
-    justifyContent: 'space-around',
-    paddingHorizontal: 16,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  statDivider: {
-    width: 1,
-    height: '100%',
-  },
+
   menuContainer: {
-    marginTop: 24,
     paddingHorizontal: 16,
   },
   menuItem: {

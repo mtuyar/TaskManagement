@@ -24,7 +24,11 @@ import { useTaskContext } from '../context/TaskContext';
 import { useTheme } from '../context/ThemeContext';
 import { scheduleNotification, cancelNotification } from '../services/notificationService';
 
+// Analiz ekranını import edelim
+import AnalysisScreen from './AnalysisScreen';
+
 // Bileşenler
+import AppHeader from '../components/AppHeader';
 import TaskItem from '../components/TaskItem';
 import TaskFormModal from '../components/TaskFormModal';
 import EmptyTaskList from '../components/EmptyTaskList';
@@ -55,6 +59,7 @@ const KisiselVazifeScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [notificationModalVisible, setNotificationModalVisible] = useState(false);
+  const [analysisModalVisible, setAnalysisModalVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDescription, setNewTaskDescription] = useState('');
@@ -376,46 +381,34 @@ const KisiselVazifeScreen = () => {
     );
   };
 
-  // Başlık bileşeni - Daha kompakt ve profesyonel
-  const renderHeader = () => {
-    // Bugünün tarihini formatlayalım
-    const today = new Date();
-    const options = { weekday: 'long', day: 'numeric', month: 'long' };
-    const formattedDate = today.toLocaleDateString('tr-TR', options);
-
+  // Header stats component
+  const renderHeaderStats = () => {
     return (
-      <Animated.View style={[styles.header, { height: headerHeight }]}>
-        <LinearGradient
-          colors={[colors.primary, colors.secondary]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.headerGradient}
+      <View style={styles.headerStatsContainer}>
+        <TouchableOpacity
+          style={styles.analysisButton}
+          onPress={() => setAnalysisModalVisible(true)}
         >
-          <Animated.View style={[styles.headerContent, { opacity: headerOpacity }]}>
-            <View style={styles.headerTopRow}>
-              <View>
-                <Text style={styles.headerTitle}>Vazifeleriniz</Text>
-                <Text style={styles.headerDate}>{formattedDate}</Text>
-              </View>
-              <View style={styles.headerStats}>
-                <View style={styles.headerStatItem}>
-                  <Text style={styles.headerStatNumber}>
-                    {getActiveTasksCount()}
-                  </Text>
-                  <Text style={styles.headerStatLabel}>Aktif</Text>
-                </View>
-                <View style={styles.headerStatDivider} />
-                <View style={styles.headerStatItem}>
-                  <Text style={styles.headerStatNumber}>
-                    {getCompletedTasksCount()}
-                  </Text>
-                  <Text style={styles.headerStatLabel}>Tamamlanan</Text>
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        </LinearGradient>
-      </Animated.View>
+          <Icon name="chart-line" size={20} color="#FFFFFF" />
+          <Text style={styles.analysisButtonText}>Analiz</Text>
+        </TouchableOpacity>
+        
+        <View style={styles.headerStats}>
+          <View style={styles.headerStatItem}>
+            <Text style={styles.headerStatNumber}>
+              {getActiveTasksCount()}
+            </Text>
+            <Text style={styles.headerStatLabel}>Aktif</Text>
+          </View>
+          <View style={styles.headerStatDivider} />
+          <View style={styles.headerStatItem}>
+            <Text style={styles.headerStatNumber}>
+              {getCompletedTasksCount()}
+            </Text>
+            <Text style={styles.headerStatLabel}>Tamamlanan</Text>
+          </View>
+        </View>
+      </View>
     );
   };
 
@@ -1065,31 +1058,43 @@ const KisiselVazifeScreen = () => {
     // Yeni görev kategorisini varsayılan olarak ayarla (isteğe bağlı)
     setNewTaskCategory('Kişisel');
 
-    // Modalı aç
-    setModalVisible(true);
-  };
+      // Modalı aç
+  setModalVisible(true);
+};
+
+// Analiz modalı render fonksiyonu
+const renderAnalysisModal = () => {
+  return (
+    <Modal
+      visible={analysisModalVisible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={() => setAnalysisModalVisible(false)}
+    >
+      <View style={styles.analysisModalContainer}>
+        <AnalysisScreen />
+        
+        {/* Kapatma butonu - Sağ üst köşede floating */}
+        <TouchableOpacity
+          style={styles.floatingCloseButton}
+          onPress={() => setAnalysisModalVisible(false)}
+        >
+          <Icon name="close" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+    </Modal>
+  );
+};
 
   return (
-    <View style={{ flex: 1 }}>
-      {/* Gradient arka plan için */}
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 70 }}>
-        <LinearGradient
-          colors={[colors.primary, colors.secondary]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={{ flex: 1 }}
-        />
-      </View>
-
-      <SafeAreaView style={{ flex: 1 }}>
-        <StatusBar
-          barStyle="light-content"
-          backgroundColor="transparent"
-          translucent={true}
-        />
-
-        <View style={styles.container}>
-          {renderHeader()}
+    <View style={styles.container}>
+      <AppHeader
+        title="Vazifeleriniz"
+        subtitle={new Date().toLocaleDateString('tr-TR', { weekday: 'long', day: 'numeric', month: 'long' })}
+        colors={[colors.primary, colors.secondary]}
+        rightComponent={renderHeaderStats()}
+        iconName={null}
+      />
 
           {/* Arama Çubuğu */}
           <View style={styles.searchContainer}>
@@ -1152,13 +1157,12 @@ const KisiselVazifeScreen = () => {
             initialTask={selectedTask}
             theme={theme}
           />
-        </View>
-      </SafeAreaView>
 
-      {renderNotificationModal()}
-      {renderDetailModal()}
+          {renderNotificationModal()}
+          {renderDetailModal()}
+          {renderAnalysisModal()}
 
-      <Modal
+          <Modal
         visible={deleteConfirmVisible}
         transparent={true}
         animationType="fade"
@@ -1200,38 +1204,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingTop: 0,
   },
-  header: {
-    width: '100%',
-    overflow: 'hidden',
+  headerStatsContainer: {
+    alignItems: 'flex-end',
   },
-  headerGradient: {
-    paddingTop: Platform.OS === 'ios' ? 30 : StatusBar.currentHeight + 10,
-    paddingHorizontal: 20,
-    paddingBottom: 15,
-    borderBottomRightRadius: 20,
-    borderBottomLeftRadius: 20,
-
-  },
-  headerContent: {
-    justifyContent: 'space-between',
-    height: '100%',
-  },
-  headerTopRow: {
+  analysisButton: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginBottom: 8,
   },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#FFF',
-  },
-  headerDate: {
-    fontSize: 15,
-    color: 'rgba(255, 255, 255, 0.8)',
-    fontWeight: '500',
-    marginBottom: 5,
+  analysisButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
   headerStats: {
     flexDirection: 'row',
@@ -1264,8 +1253,8 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 20,
-    marginTop: -25,
-    marginBottom: 10,
+    marginTop: -20,
+    marginBottom: 15,
     zIndex: 10,
   },
   searchBar: {
@@ -1965,6 +1954,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 12,
     marginBottom: 10,
+  },
+  analysisModalContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  floatingCloseButton: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight + 15,
+    right: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
 });
 
