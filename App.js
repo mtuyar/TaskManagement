@@ -6,7 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Platform, View, Text, StyleSheet, Dimensions, StatusBar, ActivityIndicator } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import { requestNotificationPermissions } from './src/services/notificationService';
+import { registerForPushNotificationsAsync } from './src/services/notificationService';
 
 // Ana Ekranlar
 import KisiselVazifeScreen from './src/screens/KisiselVazifeScreen';
@@ -291,7 +291,7 @@ const AppContent = () => {
   // Uygulama başladığında bildirim izinlerini kontrol et
   useEffect(() => {
     const checkPermissions = async () => {
-      await requestNotificationPermissions();
+      await registerForPushNotificationsAsync();
     };
     
     checkPermissions();
@@ -309,8 +309,8 @@ const AppContent = () => {
     }
   }, []);
 
-  // Loading state - Longer timeout for better session recovery
-  if (loading || initializing) {
+  // Loading state - Sadece gerçekten gerekli olduğunda göster
+  if (loading && initializing) {
     return <LoadingScreen />;
   }
 
@@ -379,14 +379,6 @@ const styles = StyleSheet.create({
   },
 });
 
-// Bildirimleri yapılandır
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    priority: Notifications.AndroidNotificationPriority.HIGH,
-  }),
-});
+
 
 export default App; 

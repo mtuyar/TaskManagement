@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     let isMounted = true;
     
-    // Mevcut session'ı al - Daha güçlü session recovery
+    // Mevcut session'ı al - Hızlı session recovery
     const initializeAuth = async () => {
       try {
         console.log('Initializing auth...');
@@ -33,24 +33,27 @@ export const AuthProvider = ({ children }) => {
         if (error) {
           console.error('Get session error:', error);
           // Session hatası varsa temizle
-          setSession(null);
-          setUser(null);
-          setUserProfile(null);
+          if (isMounted) {
+            setSession(null);
+            setUser(null);
+            setUserProfile(null);
+            setLoading(false);
+            setInitializing(false);
+          }
         } else if (session) {
           console.log('Existing session found:', session.user?.email);
           
-          // Session varsa kullanıcıyı ayarla
+          // Session varsa kullanıcıyı hemen ayarla
           if (isMounted) {
             setSession(session);
             setUser(session.user);
+            setLoading(false);
+            setInitializing(false);
             
-            // Profili yükle
-            try {
-              await fetchUserProfile(session.user.id);
-              console.log('Session restored successfully');
-            } catch (profileError) {
+            // Profili arka planda yükle
+            fetchUserProfile(session.user.id).catch(profileError => {
               console.error('Profile fetch error during init:', profileError);
-            }
+            });
           }
         } else {
           console.log('No existing session found');
@@ -59,6 +62,8 @@ export const AuthProvider = ({ children }) => {
             setSession(null);
             setUser(null);
             setUserProfile(null);
+            setLoading(false);
+            setInitializing(false);
           }
         }
       } catch (error) {
@@ -68,9 +73,6 @@ export const AuthProvider = ({ children }) => {
           setSession(null);
           setUser(null);
           setUserProfile(null);
-        }
-      } finally {
-        if (isMounted) {
           setLoading(false);
           setInitializing(false);
         }
@@ -87,24 +89,23 @@ export const AuthProvider = ({ children }) => {
         
         if (!isMounted) return;
         
-        // State güncellemeleri
+        // State güncellemeleri - hemen yap
         setSession(session);
         setUser(session?.user || null);
         
         if (session?.user) {
-          // Kullanıcı giriş yaptı, profilini al
-          try {
-            await fetchUserProfile(session.user.id);
-            console.log('Profile loaded after auth state change');
-          } catch (error) {
+          // Kullanıcı giriş yaptı, profilini arka planda al
+          fetchUserProfile(session.user.id).catch(error => {
             console.error('Profile fetch error:', error);
-          }
+          });
+          console.log('Profile loading started after auth state change');
         } else {
           // Kullanıcı çıkış yaptı
           setUserProfile(null);
           console.log('User logged out - profile cleared');
         }
         
+        // Loading state'leri hemen temizle
         setLoading(false);
         setInitializing(false);
       }

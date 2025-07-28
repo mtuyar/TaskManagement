@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // OpenRouter API anahtarınız 
-const OPENROUTER_API_KEY = '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';
+const OPENROUTER_API_KEY = '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';
 //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'
 //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
 //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

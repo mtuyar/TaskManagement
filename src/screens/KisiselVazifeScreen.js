@@ -73,6 +73,8 @@ const KisiselVazifeScreen = () => {
   const [notificationEnabled, setNotificationEnabled] = useState(false);
   const [notificationTime, setNotificationTime] = useState(new Date());
   const [showTimePicker, setShowTimePicker] = useState(false);
+  
+
 
   // Silme işlemi için onay kutusu
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
@@ -212,11 +214,10 @@ const KisiselVazifeScreen = () => {
       // Bildirim yoksa, varsayılan değerleri ayarla
       setNotificationEnabled(false);
 
-      // Varsayılan bildirim zamanı: şu andan 1 saat sonra
+      // Varsayılan bildirim zamanı: yarın sabah 9:00
       const defaultTime = new Date();
-      defaultTime.setHours(defaultTime.getHours() + 1);
-      defaultTime.setMinutes(0);
-      defaultTime.setSeconds(0);
+      defaultTime.setDate(defaultTime.getDate() + 1);
+      defaultTime.setHours(9, 0, 0, 0);
       setNotificationTime(defaultTime);
     }
 
@@ -256,24 +257,13 @@ const KisiselVazifeScreen = () => {
           );
         }
 
-        // Bildirim ID'si oluştur
-        const notificationId = `task_${selectedTask.id}`;
-
         // Önce varsa eski bildirimi iptal et
         if (selectedTask.notification?.id) {
           await cancelNotification(selectedTask.notification.id);
         }
 
-        // Yeni bildirimi planla - notificationTimeObj'yi doğrudan kullan
-        // scheduleNotification fonksiyonu içinde gerekli kontroller yapılacak
-        await scheduleNotification({
-          id: notificationId,
-          title: 'Vazife Hatırlatıcı',
-          body: selectedTask.title,
-          data: { taskId: selectedTask.id },
-          time: notificationTimeObj,
-          repeat: true
-        });
+        // Yeni bildirimi planla - doğru parametrelerle
+        const notificationId = await scheduleNotification(selectedTask, notificationTimeObj);
 
         // Görevi güncelle
         const updatedTask = {
@@ -789,6 +779,8 @@ const KisiselVazifeScreen = () => {
                 </View>
               )}
 
+
+
               {/* Butonlar */}
               <View style={styles.notificationButtonsContainer}>
                 <TouchableOpacity
@@ -1095,6 +1087,8 @@ const renderAnalysisModal = () => {
         rightComponent={renderHeaderStats()}
         iconName={null}
       />
+
+
 
           {/* Arama Çubuğu */}
           <View style={styles.searchContainer}>
@@ -1588,6 +1582,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginLeft: 8,
   },
+
   detailModal: {
     width: '90%',
     maxHeight: '65%',
@@ -1976,6 +1971,8 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+
+
 });
 
 export default KisiselVazifeScreen;
